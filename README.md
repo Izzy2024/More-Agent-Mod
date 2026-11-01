@@ -1,53 +1,55 @@
-# More agents: mod de Herdr App (borrador)
+[Español: README.es.md](README.es.md)
 
-Añade al menú + de Herdr App agentes que no vienen listos. Los eliges de un **catálogo de datos** (`mods/more-agents/catalog.js`) o añades uno propio con el formulario. Escribe en `~/.config/herdr-app/programs.json`:
-- fusiona con lo que ya tienes;
-- antes de cada escritura copia el archivo a `programs.json.more-agents.bak`;
-- nunca pisa una entrada tuya que ya tenga `run`;
-- no escribe si el archivo cambió entre medias.
+# More agents: a Herdr App mod
+
+Adds, to the Herdr App + menu, agents that do not come ready to use. You pick them from a **data catalog** (`mods/more-agents/catalog.js`) or add one of your own with the form. It writes to `~/.config/herdr-app/programs.json`:
+- it merges with what you already have;
+- before each write it copies the file to `programs.json.more-agents.bak`;
+- it never overwrites an entry of yours that already has `run`;
+- it does not write if the file changed in the meantime.
 
 ```
-RECIPE.md                    ficha para herdr.dev/mods
-CONTRIBUTING.md              cómo añadir un agente por PR
-preview.png                  captura real (herdr-app shot, Herdr 0.1.10, Linux)
-keys.json                    opcional: alt-shift-a -> mod.open:more-agents
-programs.snippet.json        alternativa sin mod (omp + Command Code a mano)
+RECIPE.md                    card for herdr.dev/mods
+CONTRIBUTING.md              how to add an agent by pull request
+preview.png                  real screenshot (herdr-app shot, Herdr 0.1.10, Linux)
+keys.json                    optional: alt-shift-a -> mod.open:more-agents
+programs.snippet.json        alternative without the mod (omp + Command Code by hand)
 mods/more-agents/
-  main.js                    diálogo
-  catalog.js                 catálogo (solo datos)
+  main.js                    dialog
+  catalog.js                 catalog (data only)
   mod.json                   place none + overlay dialog
 scripts/
-  validate-catalog.mjs       valida el esquema del catálogo
-  smoke-test.mjs             prueba la lógica de main.js con stubs (sin UI)
-  smoke/                     stubs y test
+  validate-catalog.mjs       validates the catalog schema
+  smoke-test.mjs             tests main.js logic with stubs (no UI)
+  smoke/                     stubs and test
 ```
 
-## ¿Por qué no sale en el menú + algo que añadí?
+## Why doesn't something I added show in the + menu?
 
-El menú + de Herdr (mod `new-menu`) enseña todos los agentes **instalados**, es decir, cuyo `run[0]` está en el PATH. De los no instalados solo enseña los dos primeros del orden interno, que siempre son Claude Code y Codex. Ningún campo de `programs.json` cambia esto.
+Herdr's + menu (the `new-menu` mod) shows every **installed** agent, meaning one whose `run[0]` is on the PATH. Of the agents that are not installed, it shows only the first two in its internal order, which are always Claude Code and Codex. No field in `programs.json` changes this.
 
-Por eso el diálogo avisa: "Añadido X; aparecerá en el menú + cuando instales `cmd`", junto con la pista de instalación. En cuanto el comando existe, el agente aparece; la caché de Herdr tarda hasta 60 s.
+That is why the dialog says: "Added X; it will show in the + menu when you install `cmd`", together with the install hint. As soon as the command exists, the agent appears; Herdr's cache takes up to 60 s.
 
-En el formulario personalizado, Tab y Shift+Tab cambian de campo y Enter en el comando añade el agente.
+In the custom form, Tab and Shift+Tab move between fields, and Enter on the command adds the agent.
 
-## Probar en local
+## Try it locally
 
-1. Copia `mods/more-agents/` a `~/.config/herdr-app/mods/more-agents/`.
-2. Valida con `herdr-app check ~/.config/herdr-app/mods/more-agents`.
-3. Ábrelo desde la paleta de comandos: `mod.open` → `more-agents`. También puedes fusionar `keys.json` en el tuyo.
-4. Revisa errores con `herdr-app status` y haz la captura para `preview.png` con `herdr-app shot`.
+1. Copy `mods/more-agents/` to `~/.config/herdr-app/mods/more-agents/`.
+2. Validate with `herdr-app check ~/.config/herdr-app/mods/more-agents`.
+3. Open it from the command palette: `mod.open` → `more-agents`. You can also merge `keys.json` into yours.
+4. Check for errors with `herdr-app status`, and take the screenshot for `preview.png` with `herdr-app shot`.
 
-## Comprobaciones sin Herdr
+## Checks without Herdr
 
 ```sh
 node scripts/validate-catalog.mjs [--icons <herdr-app>/defaults/icons --builtin <herdr-app>/defaults/programs.json]
 node scripts/smoke-test.mjs
 ```
 
-## Publicar
+## Publish
 
-1. Crea un repo público con esta carpeta.
-2. Añade el topic `herdr-mod`.
-3. Aparece en herdr.dev/mods → Community.
+1. Create a public repo with this folder.
+2. Add the topic `herdr-mod`.
+3. It shows up at herdr.dev/mods → Community.
 
-Estado: `herdr-app check` pasa y el diálogo abre y escribe programs.json en Herdr App 0.1.10 (Linux). Falta probar los clics a mano.
+Status: `herdr-app check` passes, and the dialog opens and writes programs.json on Herdr App 0.1.10 (Linux). The clicks still need to be tried by hand.

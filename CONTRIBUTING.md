@@ -1,10 +1,10 @@
-# Contribuir
+# Contributing
 
-## Añadir un agente al catálogo (por PR, sin tocar código)
+## Add an agent to the catalog (by pull request, without touching code)
 
-El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y después `export default [ ... ];` con **JSON estricto**: comillas dobles, sin comentarios dentro y sin comas finales. El runtime de los mods de Herdr solo importa `.js`, por eso no es un `.json`.
+The catalog is `mods/more-agents/catalog.js`. It has `//` comments at the top, then `export default [ ... ];` with **strict JSON**: double quotes, no comments inside, and no trailing commas. Herdr's mod runtime only imports `.js`, which is why this is not a `.json` file.
 
-1. Añade un objeto a la lista:
+1. Add an object to the list:
 
    ```json
    {
@@ -22,23 +22,23 @@ El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y d
    }
    ```
 
-   | Campo | Obligatorio | Qué es |
+   | Field | Required | What it is |
    |---|---|---|
-   | `id` | sí | Clave en programs.json. Minúsculas, números y `. _ -`, máximo 32 caracteres. No puede acabar en `-continue`. |
-   | `name` | sí | Nombre visible. |
-   | `run` | sí | argv para arrancarlo en modo interactivo. `run[0]` es el binario. |
-   | `match` | no | Otros nombres de proceso, o el `app=` que el agente reporta por OSC 7501. |
-   | `continue` | no | argv para retomar la última sesión, con el mismo binario. **Solo si está documentado.** |
-   | `install` | no | Comando de instalación oficial. Si no hay uno, se muestra `docs`. |
-   | `docs` | sí | URL https de la documentación. |
-   | `icon` | sí | `icons/<nombre>.svg`, de los iconos que trae Herdr (`defaults/icons/` en herdr-app). Si no hay uno del agente, usa `icons/agent.svg`. No se pueden añadir logos aquí. |
-   | `status` | sí | `verified`: comando sacado de docs oficiales. `unverified`: se lista pero no se ofrece. `builtin`: Herdr ya lo trae con `run`. |
-   | `source` | sí | URL donde se comprueba `run` (y `continue`). |
-   | `note` | no | Texto corto. |
+   | `id` | yes | Key in programs.json. Lowercase letters, digits, and `. _ -`, 32 characters at most. It cannot end in `-continue`. |
+   | `name` | yes | Visible name. |
+   | `run` | yes | argv to start it in interactive mode. `run[0]` is the binary. |
+   | `match` | no | Other process names, or the `app=` value the agent reports over OSC 7501. |
+   | `continue` | no | argv to resume the last session, using the same binary. **Only if that flag is documented.** |
+   | `install` | no | Official install command. If there is none, `docs` is shown instead. |
+   | `docs` | yes | https URL of the documentation. |
+   | `icon` | yes | `icons/<nombre>.svg`, one of the icons Herdr ships (`defaults/icons/` in herdr-app). If the agent has no icon of its own, use `icons/agent.svg`. Logos cannot be added here. |
+   | `status` | yes | `verified`: command taken from official docs. `unverified`: listed, but not offered. `builtin`: Herdr already ships it with `run`. |
+   | `source` | yes | URL where `run` (and `continue`) is checked. |
+   | `note` | no | Short text. |
 
-2. **No inventes comandos.** `run`, `continue` e `install` tienen que salir de la documentación o del README oficial que pones en `source`. Si no lo puedes confirmar, usa `"status": "unverified"` o deja fuera `continue`.
-3. Si Herdr ya trae el agente con `run` en su `defaults/programs.json`, usa `"status": "builtin"`.
-4. Valida antes de abrir el PR:
+2. **Do not invent commands.** `run`, `continue`, and `install` have to come from the documentation or the official README you cite in `source`. If you cannot confirm them, use `"status": "unverified"` or leave `continue` out.
+3. If Herdr already ships the agent with `run` in its `defaults/programs.json`, use `"status": "builtin"`.
+4. Validate before opening the pull request:
 
    ```sh
    node scripts/validate-catalog.mjs
@@ -47,13 +47,13 @@ El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y d
    node scripts/smoke-test.mjs
    ```
 
-5. En el PR, enlaza la fuente y di cómo lo probaste: el agente aparece en el menú + y arranca.
+5. In the pull request, link the source and say how you tested it: the agent shows in the + menu and starts.
 
-## Cambios de código
+## Code changes
 
-Si cambias `main.js`, prueba también en Herdr App:
+If you change `main.js`, also test it in Herdr App:
 - `herdr-app check mods/more-agents`;
-- abrir el diálogo, añadir y quitar agentes;
-- revisar `herdr-app status`.
+- open the dialog, add agents, and remove them;
+- check `herdr-app status`.
 
-Actualiza `preview.png` con `herdr-app shot` si cambia el aspecto.
+Update `preview.png` with `herdr-app shot` if the look changes.
