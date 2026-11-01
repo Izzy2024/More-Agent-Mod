@@ -8,6 +8,20 @@ Adds, to the Herdr App + menu, agents that do not come ready to use. You pick th
 - it never overwrites an entry of yours that already has `run`;
 - it does not write if the file changed in the meantime.
 
+## Install
+
+On Linux and macOS, Herdr App keeps its config in `~/.config/herdr-app`:
+
+```sh
+git clone https://github.com/Izzy2024/More-Agent-Mod.git && mkdir -p ~/.config/herdr-app/mods && cp -r More-Agent-Mod/mods/more-agents ~/.config/herdr-app/mods/
+```
+
+Open it with `herdr-app do mod.open --name more-agents`, or optionally bind a key by merging the entry from `keys.json` (Alt+Shift+A) into `~/.config/herdr-app/keys.json`.
+
+Built to work on Linux, macOS and Windows (the mod asks Herdr for its config folder and uses `sh` on Linux/macOS and `where` on Windows to detect installed agents), but only tested on Linux so far.
+
+This is a Herdr App mod (copy the folder, as above) and not a `herdr plugin install` plugin, which is a different extension system for the Herdr CLI.
+
 ```
 RECIPE.md                    card for herdr.dev/mods
 CONTRIBUTING.md              how to add an agent by pull request

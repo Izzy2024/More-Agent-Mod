@@ -8,6 +8,20 @@ Añade al menú + de Herdr App agentes que no vienen listos. Los eliges de un **
 - nunca pisa una entrada tuya que ya tenga `run`;
 - no escribe si el archivo cambió entre medias.
 
+## Instalar
+
+En Linux y macOS, Herdr App guarda su configuración en `~/.config/herdr-app`:
+
+```sh
+git clone https://github.com/Izzy2024/More-Agent-Mod.git && mkdir -p ~/.config/herdr-app/mods && cp -r More-Agent-Mod/mods/more-agents ~/.config/herdr-app/mods/
+```
+
+Ábrelo con `herdr-app do mod.open --name more-agents`, o, si quieres, asigna una tecla fusionando la entrada de `keys.json` (Alt+Shift+A) en `~/.config/herdr-app/keys.json`.
+
+Hecho para funcionar en Linux, macOS y Windows (el mod le pide a Herdr su carpeta de configuración y usa `sh` en Linux/macOS y `where` en Windows para detectar los agentes instalados), pero de momento solo se ha probado en Linux.
+
+Es un mod de Herdr App (copia la carpeta, como arriba) y no un plugin de `herdr plugin install`, que es otro sistema de extensiones para la CLI de Herdr.
+
 ```
 RECIPE.md                    ficha para herdr.dev/mods
 CONTRIBUTING.md              cómo añadir un agente por PR
