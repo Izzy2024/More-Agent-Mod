@@ -1,10 +1,10 @@
-// Catálogo de agentes de More agents. SOLO DATOS: después de `export default`
-// tiene que haber JSON estricto (comillas dobles, sin comentarios ni comas
-// finales), que es lo que comprueba `node scripts/validate-catalog.mjs`.
-// El runtime de los mods solo importa archivos .js, por eso no es un .json.
-// status: "verified" (comando de las docs oficiales, ver source),
-//         "unverified" (no se ofrece para añadir) o
-//         "builtin" (Herdr ya lo trae en su menú +; solo informativo).
+// More agents agent catalog. DATA ONLY: after `export default` there must be
+// strict JSON (double quotes, no comments or trailing commas), which is what
+// `node scripts/validate-catalog.mjs` checks.
+// The mod runtime only imports .js files, which is why this isn't a .json.
+// status: "verified" (command from the official docs, see source),
+//         "unverified" (not offered for adding) or
+//         "builtin" (Herdr already ships it in its + menu; informational only).
 export default [
   {
     "id": "omp",
@@ -24,7 +24,7 @@ export default [
     "icon": "icons/pi.svg",
     "status": "verified",
     "source": "https://omp.sh/docs/quickstart",
-    "note": "Fork de Pi; reutiliza el icono de Pi."
+    "note": "Fork of Pi; reuses the Pi icon."
   },
   {
     "id": "command-code",
@@ -46,7 +46,7 @@ export default [
     "icon": "icons/command-code.svg",
     "status": "verified",
     "source": "https://commandcode.ai/docs/reference/cli",
-    "note": "Herdr ya trae nombre e icono, pero sin run."
+    "note": "Herdr already ships a name and icon, but no run."
   },
   {
     "id": "kilo",
@@ -66,7 +66,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://github.com/Kilo-Org/kilocode#readme",
-    "note": "Fork de OpenCode."
+    "note": "Fork of OpenCode."
   },
   {
     "id": "qwen-code",
@@ -102,7 +102,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://goose-docs.ai/docs/guides/goose-cli-commands",
-    "note": "Continuar sin verificar: --resume sin nombre no está documentado como 'la última'."
+    "note": "Continue unverified: --resume without a name is not documented as 'the latest'."
   },
   {
     "id": "aider",
@@ -122,7 +122,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://aider.chat/docs/config/options.html",
-    "note": "Corre bajo Python; Herdr lo reconoce por el nombre del script."
+    "note": "Runs under Python; Herdr recognizes it by the script name."
   },
   {
     "id": "cline",
@@ -138,7 +138,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://github.com/cline/cline#readme",
-    "note": "Flag de continuar sin verificar."
+    "note": "Continue flag unverified."
   },
   {
     "id": "droid",
@@ -158,7 +158,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://docs.factory.ai/reference/cli-reference",
-    "note": "--resume sin id abre la sesión modificada más recientemente."
+    "note": "--resume without an id opens the most recently modified session."
   },
   {
     "id": "auggie",
@@ -193,7 +193,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://github.com/JetBrains/junie#readme",
-    "note": "Flag de continuar sin verificar."
+    "note": "Continue flag unverified."
   },
   {
     "id": "mistral-vibe",
@@ -228,7 +228,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://github.com/continuedev/continue/blob/main/extensions/cli/README.md",
-    "note": "Flag de continuar sin verificar."
+    "note": "Continue flag unverified."
   },
   {
     "id": "trae-agent",
@@ -244,7 +244,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://github.com/bytedance/trae-agent#readme",
-    "note": "Se instala con git clone + uv sync en un venv: trae-cli tiene que estar en tu PATH."
+    "note": "Installed with git clone + uv sync in a venv: trae-cli has to be on your PATH."
   },
   {
     "id": "gemini",

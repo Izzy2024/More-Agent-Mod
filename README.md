@@ -28,7 +28,7 @@ scripts/
 
 Herdr's + menu (the `new-menu` mod) shows every **installed** agent, meaning one whose `run[0]` is on the PATH. Of the agents that are not installed, it shows only the first two in its internal order, which are always Claude Code and Codex. No field in `programs.json` changes this.
 
-That is why the dialog says: "Added X; it will show in the + menu when you install `cmd`", together with the install hint. As soon as the command exists, the agent appears; Herdr's cache takes up to 60 s.
+That is why the dialog says: "Added X; it will show in the + menu once you install `cmd`", together with the install hint. As soon as the command exists, the agent appears; Herdr's cache takes up to 60 s.
 
 In the custom form, Tab and Shift+Tab move between fields, and Enter on the command adds the agent.
 
