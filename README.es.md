@@ -44,7 +44,7 @@ El menú + de Herdr (mod `new-menu`) enseña todos los agentes **instalados**, e
 
 Por eso el diálogo avisa: "Added X; it will show in the + menu once you install `cmd`", junto con la pista de instalación. En cuanto el comando existe, el agente aparece; la caché de Herdr tarda hasta 60 s.
 
-En el formulario personalizado, Tab y Shift+Tab cambian de campo y Enter en el comando añade el agente.
+Teclado: el foco empieza en el campo de clave del formulario propio. Tab y Shift+Tab van clave → nombre → comando → continue → Add → Add custom → Close, y no dan la vuelta. En el catálogo, ↑/↓ mueven entre agentes y Espacio/Enter los marcan; Espacio/Enter también conmutan continue y los botones. Los comandos se parten como un programa, no como un shell: comillas simples y dobles agrupan y solo `\"` y `\\` escapan, así que las rutas entre comillas sobreviven; una comilla sin cerrar es un error. El formulario propio no escribe `match` (Herdr lo deriva de `run[0]`), y se rechazan las claves `shell`, `program`, `agent` y cualquiera que acabe en `-continue`.
 
 ## Probar en local
 

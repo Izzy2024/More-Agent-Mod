@@ -44,7 +44,7 @@ Herdr's + menu (the `new-menu` mod) shows every **installed** agent, meaning one
 
 That is why the dialog says: "Added X; it will show in the + menu once you install `cmd`", together with the install hint. As soon as the command exists, the agent appears; Herdr's cache takes up to 60 s.
 
-In the custom form, Tab and Shift+Tab move between fields, and Enter on the command adds the agent.
+Keyboard: focus starts in the custom key field. Tab and Shift+Tab go key → name → command → continue → Add → Add custom → Close, and they do not wrap. In the catalog, ↑/↓ move between agents and Space/Enter tick them; Space/Enter also toggle continue and the buttons. Commands are split like a program, not like a shell: single and double quotes group and only `\"` and `\\` escape, so quoted paths survive; an unclosed quote is an error. The custom form never writes `match` (Herdr derives it from `run[0]`), and the keys `shell`, `program`, `agent` and anything ending in `-continue` are refused.
 
 ## Try it locally
 
