@@ -35,7 +35,7 @@ mods/more-agents/
 scripts/
   validate-catalog.mjs       valida el esquema del catálogo
   smoke-test.mjs             prueba la lógica de main.js con stubs (sin UI)
-  smoke/                     stubs y test
+  smoke/                     stubs y *.test.mjs (un sandbox por archivo)
 ```
 
 ## ¿Por qué no sale en el menú + algo que añadí?

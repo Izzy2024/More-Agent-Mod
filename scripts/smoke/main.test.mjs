@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert";
 import { HOME, notes } from "./stubs.mjs";
-const M = (await import("./main.mjs")).default;
+const M = (await import("./main.js")).default;
 fs.mkdirSync(HOME, { recursive: true });
 const P = HOME + "/programs.json";
 fs.writeFileSync(P, JSON.stringify({ programs: { aider: { run: ["my-aider"] }, "command-code": { tile: "#ff0000" } }, shells: ["zsh"] }, null, 2));

@@ -35,7 +35,7 @@ mods/more-agents/
 scripts/
   validate-catalog.mjs       validates the catalog schema
   smoke-test.mjs             tests main.js logic with stubs (no UI)
-  smoke/                     stubs and test
+  smoke/                     stubs and *.test.mjs (one sandbox per file)
 ```
 
 ## Why doesn't something I added show in the + menu?
