@@ -12,8 +12,48 @@ import CATALOG from "./catalog.js";
 
 const OWN = "more-agents.keys"; // keys this mod wrote (only those can be removed)
 const KEY_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
+// The table's own keys (herdr.d.ts Program: "claude", "nvim", "shell",
+// "program" (anything unlisted), "agent"). They are not ours to redefine.
+const RESERVED = new Set(["shell", "program", "agent"]);
 const WINDOWS = /^[A-Za-z]:[\\/]/.test(home()) || home().includes("\\");
 const TILE = { tint: true, tile: "#1c1d21", color: "#ffffff" };
+
+// Splits a command the way a program does, not the way a shell does: single and
+// double quotes group, and only \" and \\ escape; any other backslash is
+// literal, so Windows paths survive. An unclosed quote is an error.
+export function tokenize(text) {
+  const argv = [];
+  let cur = "";
+  let quoted = false; // the current token started, even if empty
+  let quote = null;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote === "'") {
+      if (ch === "'") quote = null;
+      else cur += ch;
+      quoted = true;
+    } else if (quote === '"') {
+      if (ch === '"') quote = null;
+      else if (ch === "\\" && (text[i + 1] === '"' || text[i + 1] === "\\")) cur += text[++i];
+      else cur += ch;
+      quoted = true;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      quoted = true;
+    } else if (ch === "\\" && (text[i + 1] === '"' || text[i + 1] === "\\")) {
+      cur += text[++i];
+      quoted = true;
+    } else if (/\s/.test(ch)) {
+      if (quoted) { argv.push(cur); cur = ""; quoted = false; }
+    } else {
+      cur += ch;
+      quoted = true;
+    }
+  }
+  if (quote) throw new Error(`Unclosed ${quote === '"' ? "double" : "single"} quote in the command.`);
+  if (quoted) argv.push(cur);
+  return argv;
+}
 
 // The programs.json entry for a catalog agent (and its continue variant).
 function entries(a, withContinue) {
@@ -48,7 +88,11 @@ export default class MoreAgents extends View {
     this.invalidField = null;
     // cx.focus_handle() belongs in init, never in render.
     const handle = () => (typeof cx.focus_handle === "function" ? cx.focus_handle() : null);
-    this.handles = { continue: handle(), "add-selected": handle(), "add-custom": handle(), close: handle() };
+    this.handles = {
+      continue: handle(), "add-selected": handle(), "add-custom": handle(), close: handle(),
+      "confirm-overwrite": handle(), "confirm-keep": handle(),
+    };
+    this.confirm = null; // pending overwrite question: { key, entry, where }
     this.rowHandles = {};
     if (typeof cx.focus_handle === "function") {
       for (const a of CATALOG) if (a.status === "verified") this.rowHandles[a.id] = cx.focus_handle();
@@ -218,15 +262,78 @@ export default class MoreAgents extends View {
     cx?.notify?.();
   }
 
+  // What the command field will produce: the argv, and whether its binary is
+  // known to be missing from the PATH.
+  runPreview() {
+    const raw = this.inputs.run.value().trim();
+    if (!raw) return { argv: [], error: null, missing: false };
+    try {
+      const argv = tokenize(raw);
+      return { argv, error: null, missing: argv.length > 0 && this.onPath[argv[0]] === false };
+    } catch (e) {
+      return { argv: [], error: e.message ?? String(e), missing: false };
+    }
+  }
+
   addCustom(cx) {
     this.invalidField = null;
+    this.confirm = null;
     const key = this.inputs.key.value().trim().toLowerCase();
     const name = this.inputs.name.value().trim();
-    const argv = this.inputs.run.value().trim().split(/\s+/).filter(Boolean);
     if (!KEY_RE.test(key)) return this.fail("key", "Invalid key: lowercase letters, digits, . _ - (max. 32).", cx);
+    if (RESERVED.has(key)) return this.fail("key", `"${key}" is a reserved program key (${[...RESERVED].join(", ")}).`, cx);
+    if (key.endsWith("-continue")) return this.fail("key", "Keys ending in -continue are reserved for catalog variants.", cx);
+    let argv;
+    try {
+      argv = tokenize(this.inputs.run.value());
+    } catch (e) {
+      return this.fail("run", e.message ?? String(e), cx);
+    }
     if (!argv.length) return this.fail("run", "The command is missing.", cx);
-    this.addEntries([[key, { name: name || key, icon: "icons/agent.svg", ...TILE, match: [argv[0]], run: argv }]], cx);
-    for (const i of Object.values(this.inputs)) i.set_value("");
+    // No match: Herdr derives the program from run[0]. A wrapper (npx, uvx,
+    // python…) would be mislabelled by a match of our own.
+    const entry = { name: name || key, icon: "icons/agent.svg", ...TILE, run: argv };
+    const inCatalog = CATALOG.some((a) => a.id === key);
+    const inFile = Boolean(this.table?.programs && Object.prototype.hasOwnProperty.call(this.table.programs, key));
+    if (inCatalog || inFile) {
+      const where = [inFile ? "your programs.json" : "", inCatalog ? "the catalog" : ""].filter(Boolean).join(" and ");
+      this.confirm = { key, entry, where };
+      this.msg = `"${key}" is already in ${where}: overwrite it or keep it as is?`;
+      this.moveFocus("confirm-keep", cx);
+      return;
+    }
+    this.writeEntry(key, entry, cx);
+  }
+
+  // Writes exactly this entry: the confirmation covered replacing whatever was there.
+  writeEntry(key, entry, cx) {
+    if (this.busy) return;
+    this.busy = true;
+    cx.spawn(async (cx) => {
+      const r = await this.edit((p) => { p[key] = entry; return { changed: [key], skipped: [] }; });
+      if (r?.changed.length) {
+        setShared(OWN, [...new Set([...this.ours(), key])]);
+        await this.detect();
+        this.msg = `Saved ${key} in your programs.json.`;
+        notify({ title: "More agents", body: `Saved ${key}.`, level: "info" });
+        for (const i of Object.values(this.inputs)) i.set_value("");
+      }
+      this.busy = false;
+      cx.notify();
+    });
+  }
+
+  resolveConfirm(overwrite, cx) {
+    const c = this.confirm;
+    this.confirm = null;
+    if (!c) return;
+    if (!overwrite) {
+      this.msg = `Kept the existing "${c.key}".`;
+      this.moveFocus("key", cx);
+      return;
+    }
+    this.invalidField = null;
+    this.writeEntry(c.key, c.entry, cx);
   }
 
   // Verified agents that can still be added, in the list's order.
@@ -243,11 +350,18 @@ export default class MoreAgents extends View {
     cx?.notify?.();
   }
 
+  // The overwrite question adds two stops before Close while it is open.
+  tabOrder() {
+    return this.confirm
+      ? [...this.order.slice(0, -1), "confirm-overwrite", "confirm-keep", "close"]
+      : this.order;
+  }
+
   // Tab / Shift+Tab through key → name → run → continue → Add → Add custom →
   // Close. At either end it stops handling Tab, so the key leaves the dialog.
   formKey(e, cx) {
     if (e.key !== "tab") return;
-    const order = this.order;
+    const order = this.tabOrder();
     let i = order.indexOf(this.focusedField);
     // Rows sit between the command and the continue checkbox, but are not Tab
     // stops themselves.
@@ -286,6 +400,8 @@ export default class MoreAgents extends View {
     if (id === "add-selected") { this.addSelected(cx); return true; }
     if (id === "add-custom") { this.addCustom(cx); return true; }
     if (id === "close") { closeOverlay(props().overlay); return true; }
+    if (id === "confirm-overwrite") { this.resolveConfirm(true, cx); return true; }
+    if (id === "confirm-keep") { this.resolveConfirm(false, cx); return true; }
     if (!id.startsWith("row-")) return false;
     const a = CATALOG.find((x) => x.id === id.slice(4));
     if (!a || !this.offeredIds().includes(a.id)) return false;
@@ -364,6 +480,7 @@ export default class MoreAgents extends View {
       .child(div().text_size(10.5).text_color(this.invalidField === k ? t.blocked : t.muted).child(label))
       .child(field(k));
     const contFocused = this.focusedField === "continue";
+    const pv = this.runPreview();
     const n = this.selectable().length;
     return v_flex().size_full().bg(t.popover).p(14).gap(8).text_size(13)
       .id("more-agents").role("dialog").accessibility_label("More agents for the + menu")
@@ -399,6 +516,15 @@ export default class MoreAgents extends View {
         .child(h_flex().gap(6).items_end()
           .child(div().flex_1().min_w(0).child(labeled("run", "Command")))
           .child(this.button("add-custom", "Add", (cx) => this.addCustom(cx), t, true))))
-      .when(Boolean(this.msg), (el) => el.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : t.muted).child(this.msg)));
+      // What the command field produces, as a list of arguments.
+      .when(pv.argv.length > 0 || Boolean(pv.error), (el) => el.child(h_flex().gap(6).items_center().min_w(0)
+        .child(div().flex_none().text_size(11).text_color(t.muted).child("run:"))
+        .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(pv.error ? t.blocked : t.dim).child(pv.error ?? JSON.stringify(pv.argv)))
+        .when(pv.missing, (e2) => e2.child(div().flex_none().text_size(11).text_color(t.blocked).child(`\`${pv.argv[0]}\` is not on your PATH`)))))
+      .when(Boolean(this.confirm), (el) => el.child(h_flex().gap(8).items_center().p(8).rounded(6).bg(t.raised)
+        .child(div().flex_1().text_size(11.5).text_color(t.blocked).child(this.msg))
+        .child(this.button("confirm-overwrite", "Overwrite", (cx) => this.resolveConfirm(true, cx), t, true))
+        .child(this.button("confirm-keep", "Keep as is", (cx) => this.resolveConfirm(false, cx), t))))
+      .when(Boolean(this.msg) && !this.confirm, (el) => el.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : t.muted).child(this.msg)));
   }
 }

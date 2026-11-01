@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import assert from "node:assert";
 import { HOME, notes } from "./stubs.mjs";
-const M = (await import("./main.js")).default;
+const main = await import("./main.js");
+const M = main.default;
+const { tokenize } = main;
 fs.mkdirSync(HOME, { recursive: true });
 const P = HOME + "/programs.json";
 fs.writeFileSync(P, JSON.stringify({ programs: { aider: { run: ["my-aider"] } }, shells: ["zsh"] }, null, 2));
@@ -87,4 +89,97 @@ assert.equal(m.withContinue, false);
 // Rendering the dialog with focus rings and labels must not throw.
 m.render();
 
-console.log("form.test: keyboard/focus OK; notifications:", notes.length);
+const settle = () => Promise.all(spawned.splice(0));
+const read = () => JSON.parse(fs.readFileSync(P, "utf8"));
+
+// 3. argv tokenizer: quotes, escapes, spaces in paths; an unclosed quote is an error.
+assert.deepEqual(tokenize(`"C:\\Program Files\\x.exe" --flag="a b"`), ["C:\\Program Files\\x.exe", "--flag=a b"]);
+assert.deepEqual(tokenize(`one 'two three' four`), ["one", "two three", "four"]);
+assert.deepEqual(tokenize(`a\\"b c\\\\d`), ['a"b', "c\\d"]);
+assert.deepEqual(tokenize("  spaced   out  "), ["spaced", "out"]);
+assert.throws(() => tokenize(`ok "unclosed`), /quote/i);
+
+// An unclosed quote: explicit error, focus on the command, nothing written.
+m.inputs.key._set("quoted");
+m.inputs.run._set(`foo "bar`);
+m.addCustom(cx);
+await settle();
+assert.equal(m.invalidField, "run");
+assert.equal(m.focusedField, "run");
+assert.match(m.msg, /quote/i);
+assert.ok(!("quoted" in read().programs));
+
+// 4. Reserved program keys (herdr.d.ts: shell, program, agent) and -continue.
+for (const key of ["shell", "program", "agent"]) {
+  m.inputs.key._set(key);
+  m.inputs.run._set("whatever");
+  m.addCustom(cx);
+  await settle();
+  assert.equal(m.invalidField, "key", `${key} is rejected`);
+  assert.match(m.msg, /reserved/i);
+  assert.ok(!(key in read().programs));
+}
+m.inputs.key._set("foo-continue");
+m.inputs.run._set("foo");
+m.addCustom(cx);
+await settle();
+assert.equal(m.invalidField, "key");
+assert.ok(!("foo-continue" in read().programs));
+
+// A key already in programs.json is not overwritten silently.
+m.inputs.key._set("aider");
+m.inputs.name._set("Aider again");
+m.inputs.run._set("aider --x");
+m.addCustom(cx);
+await settle();
+assert.ok(m.confirm, "asks before overwriting a key in programs.json");
+assert.deepEqual(read().programs.aider.run, ["my-aider"], "kept untouched until confirmed");
+m.resolveConfirm(false, cx);
+await settle();
+assert.deepEqual(read().programs.aider.run, ["my-aider"], "keep as is");
+assert.equal(m.confirm, null);
+
+// Confirmed overwrite replaces the entry, leaving the rest of the file alone.
+m.inputs.key._set("aider");
+m.inputs.run._set("aider --x");
+m.addCustom(cx);
+await settle();
+m.resolveConfirm(true, cx);
+await settle();
+assert.deepEqual(read().programs.aider.run, ["aider", "--x"]);
+assert.deepEqual(read().shells, ["zsh"], "top-level keys preserved");
+
+// A catalog key also asks before taking the name.
+m.inputs.key._set("omp");
+m.inputs.run._set("omp");
+m.addCustom(cx);
+await settle();
+assert.ok(m.confirm, "asks before reusing a catalog key");
+m.resolveConfirm(false, cx);
+await settle();
+assert.ok(!("omp" in read().programs));
+
+// A new custom key is written with the parsed argv and no `match`.
+m.inputs.key._set("my-agent");
+m.inputs.name._set("My Agent");
+m.inputs.run._set(`"C:\\Program Files\\x.exe" --flag="a b"`);
+m.addCustom(cx);
+await settle();
+const p = read().programs["my-agent"];
+assert.deepEqual(p.run, ["C:\\Program Files\\x.exe", "--flag=a b"]);
+assert.ok(!("match" in p), "Herdr derives the program from run[0]");
+assert.equal(p.name, "My Agent");
+
+// Preview: the argv list, and a warning when the binary is not on the PATH.
+m.onPath.foo = false;
+m.inputs.run._set(`foo --bar`);
+let pv = m.runPreview();
+assert.deepEqual(pv.argv, ["foo", "--bar"]);
+assert.equal(pv.missing, true);
+m.inputs.run._set(`--flag="a b"`);
+pv = m.runPreview();
+assert.deepEqual(pv.argv, ["--flag=a b"]);
+m.inputs.run._set(`"x`);
+assert.match(m.runPreview().error, /quote/i);
+
+console.log("form.test: keyboard/focus + custom form OK; notifications:", notes.length);
