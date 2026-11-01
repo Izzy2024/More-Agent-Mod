@@ -28,7 +28,7 @@ scripts/
 
 El menú + de Herdr (mod `new-menu`) enseña todos los agentes **instalados**, es decir, cuyo `run[0]` está en el PATH. De los no instalados solo enseña los dos primeros del orden interno, que siempre son Claude Code y Codex. Ningún campo de `programs.json` cambia esto.
 
-Por eso el diálogo avisa: "Añadido X; aparecerá en el menú + cuando instales `cmd`", junto con la pista de instalación. En cuanto el comando existe, el agente aparece; la caché de Herdr tarda hasta 60 s.
+Por eso el diálogo avisa: "Added X; it will show in the + menu once you install `cmd`", junto con la pista de instalación. En cuanto el comando existe, el agente aparece; la caché de Herdr tarda hasta 60 s.
 
 En el formulario personalizado, Tab y Shift+Tab cambian de campo y Enter en el comando añade el agente.
 

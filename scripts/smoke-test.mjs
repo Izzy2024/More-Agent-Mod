@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Prueba la lógica de main.js en Node con stubs de gpui-kit/gpui-base/herdr
-// (no prueba la UI real). Uso: node scripts/smoke-test.mjs
+// Tests main.js logic in Node with gpui-kit/gpui-base/herdr stubs
+// (does not test the real UI). Usage: node scripts/smoke-test.mjs
 import { mkdtempSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";

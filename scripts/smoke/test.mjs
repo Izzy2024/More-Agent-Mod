@@ -21,16 +21,16 @@ assert.deepEqual(t.programs["droid-continue"].run, ["droid", "--resume"]);
 assert.deepEqual(t.shells, ["zsh"]);
 assert.ok(fs.existsSync(P + ".more-agents.bak")); assert.ok(JSON.parse(fs.readFileSync(P + ".more-agents.bak","utf8")).programs.aider);
 console.log("msg:", m.msg);
-// Mensaje según instalación: omp está en el PATH (stub exec), command-code y droid no.
-assert.match(m.msg, /omp, omp-continue: ya salen en el menú \+/);
-assert.match(m.msg, /Añadido command-code; aparecerá en el menú \+ cuando instales `command-code`/);
-assert.match(m.msg, /Añadido droid; aparecerá .*`droid`/); assert.ok(!/Añadido droid-continue/.test(m.msg));
+// Install-aware message: omp is on the PATH (stub exec), command-code and droid are not.
+assert.match(m.msg, /omp, omp-continue: now show in the \+ menu/);
+assert.match(m.msg, /Added command-code; it will show in the \+ menu once you install `command-code`/);
+assert.match(m.msg, /Added droid; it will show .*`droid`/); assert.ok(!/Added droid-continue/.test(m.msg));
 assert.equal(m.selected.size, 0, "selection cleared after add");
 assert.equal(notes.at(-1).level, "info");
-// El contador solo cuenta lo que se puede añadir.
+// The counter only counts what can be added.
 m.selected.add("omp"); m.selected.add("kilo"); m.selected.add("gemini");
 assert.deepEqual(m.selectable(), ["kilo"]); m.selected.clear();
-// Tab mueve el foco clave → nombre → comando → clave; Shift+Tab al revés.
+// Tab moves focus key → name → command → key; Shift+Tab goes backwards.
 let stopped = 0; const kcx = { stop_propagation: () => { stopped++; } };
 m.inputs.key._fire("focus"); m.formKey({ key: "tab", modifiers: {} }, kcx); assert.equal(m.focusedField, "name");
 m.formKey({ key: "tab", modifiers: { shift: true } }, kcx); assert.equal(m.focusedField, "key");
