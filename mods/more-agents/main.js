@@ -10,10 +10,32 @@ import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { appHome, home, exec, readTextFile, writeTextFile, knownAgents, theme, props, closeOverlay, notify, shared, setShared } from "herdr";
 import CATALOG from "./catalog.js";
 
-const OWN = "more-agents.keys"; // keys this mod wrote (only those can be removed)
+const OWN = "more-agents.keys"; // key -> fingerprint of the entry this mod wrote
 const KEY_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 const WINDOWS = /^[A-Za-z]:[\\/]/.test(home()) || home().includes("\\");
 const TILE = { tint: true, tile: "#1c1d21", color: "#ffffff" };
+
+const isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+// A run counts only as a non-empty array: [] , null or a stray string are not a command.
+const runOf = (entry) => (Array.isArray(entry?.run) && entry.run.length ? entry.run : null);
+const errText = (e) => String(e?.message ?? e);
+// Key-order-independent JSON, for comparing an entry with its merged result.
+function stableJson(v) {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
+  if (isObject(v)) return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableJson(v[k])}`).join(",")}}`;
+  return JSON.stringify(v) ?? "undefined";
+}
+
+// FNV-1a of the whole entry, so any later edit by hand changes the fingerprint.
+function fingerprint(entry) {
+  const s = stableJson(entry);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `fnv1a:${h.toString(16).padStart(8, "0")}`;
+}
 
 // The programs.json entry for a catalog agent (and its continue variant).
 function entries(a, withContinue) {
@@ -29,11 +51,13 @@ export default class MoreAgents extends View {
     this.raw = null;            // current text (null: does not exist)
     this.table = null;          // parsed JSON
     this.error = null;          // invalid file: nothing gets written
+    this.loadGen = 0;           // ignores an older load that finishes late
     this.onPath = {};           // binary -> is on the PATH
     this.selected = new Set();  // checked ids
     this.withContinue = false;
     this.busy = false;
     this.msg = "";
+    this.confirm = null;        // pending "Remove anyway / Keep"
     this.inputs = {
       key: InputState.new({ placeholder: "key, e.g. my-agent" }),
       name: InputState.new({ placeholder: "display name" }),
@@ -53,23 +77,62 @@ export default class MoreAgents extends View {
   }
 
   async load() {
+    const gen = ++this.loadGen;
+    let raw;
     try {
-      this.raw = await readTextFile(this.path);
-      const t = this.raw == null ? { programs: {} } : JSON.parse(this.raw);
-      if (typeof t !== "object" || t === null || Array.isArray(t)) throw new Error("programs.json is not an object");
-      t.programs ??= {};
-      this.table = t;
-      this.error = null;
+      raw = await readTextFile(this.path);
     } catch (e) {
-      this.error = `Not touching programs.json: ${e.message ?? e}. Fix it (see programs.error in herdr-app status) and reopen this dialog.`;
+      if (gen !== this.loadGen) return;
+      this.raw = null;
+      this.table = null;
+      this.error = `Could not read ${this.path}: ${errText(e)}. Nothing was written.`;
+      return;
     }
+    if (gen !== this.loadGen) return; // a newer load already decided
+    this.raw = raw;
+    if (raw == null) {
+      this.table = { programs: {} };
+      this.error = null;
+      this.reconcileOwn(this.table.programs);
+      return;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      this.table = null;
+      this.error = `programs.json is not valid JSON: ${errText(e)}. Nothing was written; fix it and try again.`;
+      return;
+    }
+    if (!isObject(parsed)) {
+      this.table = null;
+      this.error = "programs.json must be a JSON object. Nothing was written.";
+      return;
+    }
+    const programs = parsed.programs ?? {};
+    if (!isObject(programs)) {
+      this.table = null;
+      this.error = 'programs.json "programs" must be an object keyed by program name. Nothing was written.';
+      return;
+    }
+    for (const [key, value] of Object.entries(programs)) {
+      if (!isObject(value)) {
+        this.table = null;
+        this.error = `programs.json has a non-object entry for "${key}". Nothing was written.`;
+        return;
+      }
+    }
+    parsed.programs = programs;
+    this.table = parsed;
+    this.error = null;
+    this.reconcileOwn(programs);
   }
 
   // Which catalog binaries are installed? A single `sh -c` (or `where` on Windows),
   // with the user's real PATH. knownAgents() only knows about entries that already have run.
   async detect() {
     // Catalog + custom agents this mod added.
-    const custom = this.ours().map((k) => this.table?.programs?.[k]?.run?.[0]).filter((b) => typeof b === "string" && b);
+    const custom = this.ours().map((k) => runOf(this.table?.programs?.[k])?.[0]).filter((b) => typeof b === "string" && b);
     const bins = [...new Set([...CATALOG.filter((a) => a.status !== "unverified").map((a) => a.run[0]), ...custom])];
     try {
       if (WINDOWS) {
@@ -84,7 +147,38 @@ export default class MoreAgents extends View {
     try { for (const a of await knownAgents()) if (a.installed) this.onPath[a.run[0]] = true; } catch {}
   }
 
-  ours() { return shared(OWN) ?? []; }
+  // Ownership: key -> fingerprint. The old format (an array of keys) means the
+  // entry was written by an older version, so its fingerprint is unknown (null).
+  own() {
+    const value = shared(OWN);
+    if (Array.isArray(value)) {
+      const map = {};
+      for (const key of value) if (typeof key === "string") map[key] = null;
+      return map;
+    }
+    if (!isObject(value)) return {};
+    const map = {};
+    for (const [key, fp] of Object.entries(value)) map[key] = typeof fp === "string" ? fp : null;
+    return map;
+  }
+
+  ours() { return Object.keys(this.own()); }
+
+  setOwn(map) { setShared(OWN, map); }
+
+  // Drop keys that are no longer in programs.json and migrate the old array.
+  reconcileOwn(programs) {
+    const raw = shared(OWN);
+    const own = this.own();
+    const kept = {};
+    for (const [key, fp] of Object.entries(own)) {
+      if (Object.prototype.hasOwnProperty.call(programs, key)) kept[key] = fp;
+    }
+    if (raw === undefined && !Object.keys(kept).length) return;
+    if (Array.isArray(raw) || stableJson(raw) !== stableJson(kept)) {
+      try { this.setOwn(kept); } catch {}
+    }
+  }
 
   // The catalog agent for a key (also for its -continue variant).
   agentOf(key) {
@@ -96,7 +190,7 @@ export default class MoreAgents extends View {
   selectable() {
     return [...this.selected].filter((id) => {
       const a = CATALOG.find((x) => x.id === id);
-      return Boolean(a) && a.status === "verified" && !this.table?.programs?.[id]?.run?.length;
+      return Boolean(a) && a.status === "verified" && !runOf(this.table?.programs?.[id]);
     });
   }
 
@@ -104,7 +198,7 @@ export default class MoreAgents extends View {
   // installed, only the first 2 in its internal order (Claude Code and Codex). An
   // added agent whose command is not on the PATH doesn't show until it's installed.
   addedMessage(keys) {
-    const binOf = (k) => this.table?.programs?.[k]?.run?.[0] ?? k;
+    const binOf = (k) => runOf(this.table?.programs?.[k])?.[0] ?? k;
     const ready = keys.filter((k) => this.onPath[binOf(k)] === true);
     const later = keys.filter((k) => this.onPath[binOf(k)] !== true);
     const parts = [];
@@ -118,77 +212,158 @@ export default class MoreAgents extends View {
     return { text: parts.join(" "), allReady: later.length === 0 };
   }
 
-  // Read → back up → change → write only if nobody touched it in between.
+  // Read → change → write only if nobody touched it in between. The backup is
+  // best-effort and written after the CAS, so a failed write cannot destroy it.
   async edit(change) {
     await this.load();
     if (this.error) { this.msg = this.error; return null; }
     const before = this.raw;
-    const result = change(this.table.programs);
-    if (!result.changed.length) return result;
-    const text = JSON.stringify(this.table, null, 2) + "\n";
+    const beforeOwn = this.own();
+    let result;
     try {
-      if (before != null) {
-        const old = await readTextFile(this.backup);
-        await writeTextFile(this.backup, before, old);
-      }
-      await writeTextFile(this.path, text, before);
-      this.raw = text;
-      return result;
+      result = change(this.table.programs);
     } catch (e) {
-      this.msg = `Could not save (did the file change in the meantime?): ${e.message ?? e}`;
+      this.msg = `Could not prepare the change: ${errText(e)}. Nothing was written.`;
+      await this.load();
       return null;
     }
+    if (!result?.changed?.length) return result;
+    let text;
+    try {
+      text = JSON.stringify(this.table, null, 2) + "\n";
+    } catch (e) {
+      this.msg = `Could not serialize programs.json: ${errText(e)}. Nothing was written.`;
+      await this.load();
+      return null;
+    }
+    try {
+      if (result.own) this.setOwn(result.own); // intent first; rolled back if the write fails
+    } catch (e) {
+      try { this.setOwn(beforeOwn); } catch {}
+      this.msg = `Could not record ownership: ${errText(e)}. Nothing was written.`;
+      await this.load();
+      return null;
+    }
+    try {
+      await writeTextFile(this.path, text, before);
+    } catch (e) {
+      try { this.setOwn(beforeOwn); } catch {}
+      const stale = /stale/i.test(errText(e));
+      const message = stale
+        ? "programs.json changed since it was read; nothing was written. Try again."
+        : `Could not write ${this.path}: ${errText(e)}. Nothing was written.`;
+      await this.load(); // show the file as it is now
+      this.msg = message;
+      return null;
+    }
+    this.raw = text;
+    let warning = "";
+    if (before != null) {
+      try {
+        const old = await readTextFile(this.backup);
+        await writeTextFile(this.backup, before, old);
+      } catch (e) {
+        warning = `The backup was not written: ${errText(e)}.`;
+      }
+    }
+    return { ...result, warning };
   }
 
   // Adds without overwriting: if your programs.json already has that key with run, it's left as is;
   // if it has it without run (e.g. just an icon), your fields win and only what's missing is added.
-  addEntries(pairs, cx) {
-    if (this.busy) return;
+  addEntries(pairs, cx, done) {
+    if (this.busy) return false;
     this.busy = true;
+    this.confirm = null;
     cx.spawn(async (cx) => {
-      const r = await this.edit((p) => {
-        const changed = [], skipped = [];
-        for (const [key, entry] of pairs) {
-          const base = key.endsWith("-continue") ? key.slice(0, -"-continue".length) : null;
-          if (p[key]?.run?.length || (base && skipped.includes(base))) { skipped.push(key); continue; }
-          p[key] = { ...entry, ...(p[key] ?? {}) };
-          changed.push(key);
+      let ok = false;
+      try {
+        const r = await this.edit((p) => {
+          const changed = [], skipped = [];
+          const own = this.own();
+          for (const [key, entry] of pairs) {
+            const base = key.endsWith("-continue") ? key.slice(0, -"-continue".length) : null;
+            const prev = p[key];
+            if (runOf(prev) || (base && skipped.includes(base))) { skipped.push(key); continue; }
+            const merged = { ...entry, ...(isObject(prev) ? prev : {}) };
+            if (!runOf(prev)) merged.run = entry.run;
+            if (isObject(prev) && stableJson(prev) === stableJson(merged)) { skipped.push(key); continue; }
+            p[key] = merged;
+            changed.push(key);
+          }
+          if (changed.length) for (const key of changed) own[key] = fingerprint(p[key]);
+          return { changed, skipped, own };
+        });
+        if (r) {
+          ok = true;
+          if (r.changed.length) {
+            await this.detect(); // the message depends on whether the command is installed
+            const added = this.addedMessage(r.changed);
+            this.msg = [
+              added.text,
+              r.warning,
+              r.skipped.length ? `Already in your programs.json (left untouched): ${r.skipped.join(", ")}.` : "",
+            ].filter(Boolean).join(" ");
+            notify({ title: "More agents", body: [added.text, r.warning].filter(Boolean).join(" "), level: added.allReady && !r.warning ? "success" : "info" });
+          } else {
+            this.msg = [
+              r.skipped.length ? `Already in your programs.json (left untouched): ${r.skipped.join(", ")}.` : "Nothing to add.",
+              r.warning,
+            ].filter(Boolean).join(" ");
+          }
+          this.selected.clear();
         }
-        return { changed, skipped };
-      });
-      if (r) {
-        if (r.changed.length) setShared(OWN, [...new Set([...this.ours(), ...r.changed])]);
-        await this.detect(); // the message depends on whether the command is installed
-        const added = r.changed.length ? this.addedMessage(r.changed) : null;
-        this.msg = [
-          added?.text ?? "",
-          r.skipped.length ? `Already in your programs.json (left untouched): ${r.skipped.join(", ")}.` : "",
-        ].filter(Boolean).join(" ");
-        if (added) notify({ title: "More agents", body: added.text, level: added.allReady ? "success" : "info" });
+      } catch (e) {
+        this.msg = `Could not add to programs.json: ${errText(e)}.`;
+      } finally {
+        this.busy = false;
+        try { done?.(ok); } catch {}
+        cx.notify();
       }
-      this.selected.clear();
-      this.busy = false;
-      cx.notify();
     });
+    return true;
   }
 
-  remove(keys, cx) {
+  remove(keys, cx, force = false) {
     if (this.busy) return;
     this.busy = true;
+    this.confirm = null;
     cx.spawn(async (cx) => {
-      const mine = new Set(this.ours());
-      const r = await this.edit((p) => {
-        const changed = keys.filter((k) => mine.has(k) && k in p);
-        for (const k of changed) delete p[k];
-        return { changed, skipped: [] };
-      });
-      if (r) {
-        setShared(OWN, this.ours().filter((k) => !r.changed.includes(k)));
-        this.msg = r.changed.length ? `Removed from your programs.json: ${r.changed.join(", ")}.` : "Nothing to remove.";
+      try {
+        let needs = null;
+        const r = await this.edit((p) => {
+          const own = this.own();
+          const present = [...new Set(keys)].filter((k) =>
+            Object.prototype.hasOwnProperty.call(own, k) && Object.prototype.hasOwnProperty.call(p, k));
+          if (!present.length) return { changed: [], skipped: [] };
+          if (!force) {
+            const bad = present.filter((k) => own[k] !== fingerprint(p[k]));
+            if (bad.length) {
+              needs = { keys: present, changed: bad };
+              return { changed: [], skipped: [] }; // nothing is written
+            }
+          }
+          for (const k of present) delete p[k];
+          const nextOwn = { ...own };
+          for (const k of present) delete nextOwn[k];
+          return { changed: present, skipped: [], own: nextOwn };
+        });
+        if (needs) {
+          this.confirm = needs;
+          this.msg = `Changed since it was added (or unknown ownership): ${needs.changed.join(", ")}. Nothing was removed.`;
+        } else if (r) {
+          this.msg = [
+            r.changed.length ? `Removed from your programs.json: ${r.changed.join(", ")}.` : "Nothing to remove.",
+            r.warning,
+          ].filter(Boolean).join(" ");
+          this.selected.clear();
+        }
+      } catch (e) {
+        this.msg = `Could not remove from programs.json: ${errText(e)}.`;
+      } finally {
+        this.busy = false;
+        cx.notify();
       }
-      this.selected.clear();
-      this.busy = false;
-      cx.notify();
     });
   }
 
@@ -203,10 +378,12 @@ export default class MoreAgents extends View {
     const key = this.inputs.key.value().trim().toLowerCase();
     const name = this.inputs.name.value().trim();
     const argv = this.inputs.run.value().trim().split(/\s+/).filter(Boolean);
+    if (this.busy) { this.msg = "Still saving the last change."; cx.notify(); return; }
     if (!KEY_RE.test(key)) { this.msg = "Invalid key: lowercase letters, digits, . _ - (max. 32)."; cx.notify(); return; }
     if (!argv.length) { this.msg = "The command is missing."; cx.notify(); return; }
-    this.addEntries([[key, { name: name || key, icon: "icons/agent.svg", ...TILE, match: [argv[0]], run: argv }]], cx);
-    for (const i of Object.values(this.inputs)) i.set_value("");
+    this.addEntries([[key, { name: name || key, icon: "icons/agent.svg", ...TILE, match: [argv[0]], run: argv }]], cx, (ok) => {
+      if (ok) for (const i of Object.values(this.inputs)) i.set_value("");
+    });
   }
 
   // Tab / Shift+Tab between key → name → command.
@@ -233,7 +410,7 @@ export default class MoreAgents extends View {
   }
 
   row(a, t) {
-    const hasRun = Boolean(this.table?.programs?.[a.id]?.run?.length);
+    const hasRun = Boolean(runOf(this.table?.programs?.[a.id]));
     const added = this.ours().includes(a.id) && hasRun;
     const yours = hasRun && !added; // you already have it in your programs.json (e.g. set up by hand)
     const builtin = a.status === "builtin";
@@ -274,13 +451,13 @@ export default class MoreAgents extends View {
       .child(h_flex().justify_between().items_center()
         .child(div().text_size(14).font_semibold().text_color(t.foreground).child("More agents for the + menu"))
         .child(this.button("close", "Close", () => closeOverlay(props().overlay), t)))
-      .child(div().text_size(11.5).text_color(t.muted).child(`Writes to ${this.path} (backup first in programs.json.more-agents.bak). Herdr reloads it by itself.`))
+      .child(div().text_size(11.5).text_color(t.muted).child(`Writes to ${this.path}; after a successful save the previous version goes to programs.json.more-agents.bak (best-effort: a backup failure is reported, not blocking the write). Herdr reloads it by itself.`))
       .when(Boolean(this.error), (el) => el.child(div().p(8).rounded(6).bg(t.raised).text_color(t.blocked).text_size(12).child(this.error)))
       .child(v_flex().id("catalog").flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
         .children(list.map((a) => this.row(a, t)))
         .children(custom.map((k) => {
           const e = this.table.programs[k];
-          return this.row({ id: k, name: e.name ?? k, run: e.run ?? [k], status: "custom", docs: "" }, t);
+          return this.row({ id: k, name: e.name ?? k, run: runOf(e) ?? [k], status: "custom", docs: "" }, t);
         })))
       .child(h_flex().gap(8).items_center()
         .child(h_flex().id("continue").gap(6).items_center().cursor_pointer()
@@ -294,6 +471,17 @@ export default class MoreAgents extends View {
       .child(v_flex().id("custom-form").gap(6).on_key_down((e, cx) => this.formKey(e, cx))
         .child(h_flex().gap(6).child(div().w(150).child(field("key"))).child(div().flex_1().child(field("name"))))
         .child(h_flex().gap(6).child(div().flex_1().child(field("run"))).child(this.button("add-custom", "Add", (cx) => this.addCustom(cx), t, true))))
-      .when(Boolean(this.msg), (el) => el.child(div().text_size(11.5).text_color(t.muted).child(this.msg)));
+      .when(Boolean(this.msg), (el) => el.child(div().text_size(11.5).text_color(t.muted).child(this.msg)))
+      .when(Boolean(this.confirm), (el) => el.child(h_flex().gap(6).justify_end()
+        .child(this.button("remove-anyway", "Remove anyway", (cx) => {
+          const keys = this.confirm?.keys ?? [];
+          this.confirm = null;
+          this.remove(keys, cx, true);
+        }, t))
+        .child(this.button("keep", "Keep", (cx) => {
+          this.confirm = null;
+          this.msg = "Kept.";
+          cx.notify();
+        }, t))));
   }
 }

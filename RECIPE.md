@@ -19,7 +19,7 @@ Open it with `mod.open more-agents` (command palette) or the key in keys.json.
 **Adding.** Tick agents and press Add. Each one becomes an entry in `~/.config/herdr-app/programs.json`, and everything else in that file is kept.
 - With "continue" ticked, a second entry starts the agent on its last session. This happens only where the agent documents a flag for it.
 - An entry you already have with a command is never replaced.
-- Before each write, the previous file is copied to `programs.json.more-agents.bak`.
+- After a successful write, the previous version is saved to `programs.json.more-agents.bak`. The backup is best-effort: a failure is reported without blocking the write.
 - The write only goes through if nobody changed the file since it was read.
 - A broken programs.json is never written; the dialog says so.
 

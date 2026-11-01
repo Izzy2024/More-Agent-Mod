@@ -4,7 +4,7 @@
 
 Adds, to the Herdr App + menu, agents that do not come ready to use. You pick them from a **data catalog** (`mods/more-agents/catalog.js`) or add one of your own with the form. It writes to `~/.config/herdr-app/programs.json`:
 - it merges with what you already have;
-- before each write it copies the file to `programs.json.more-agents.bak`;
+- after a successful write it saves the previous version to `programs.json.more-agents.bak`; the backup is best-effort, so a failure is reported without blocking the write;
 - it never overwrites an entry of yours that already has `run`;
 - it does not write if the file changed in the meantime.
 
