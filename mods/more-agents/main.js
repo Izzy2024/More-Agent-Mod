@@ -451,7 +451,7 @@ export default class MoreAgents extends View {
       .child(h_flex().justify_between().items_center()
         .child(div().text_size(14).font_semibold().text_color(t.foreground).child("More agents for the + menu"))
         .child(this.button("close", "Close", () => closeOverlay(props().overlay), t)))
-      .child(div().text_size(11.5).text_color(t.muted).child(`Writes to ${this.path} (backup first in programs.json.more-agents.bak). Herdr reloads it by itself.`))
+      .child(div().text_size(11.5).text_color(t.muted).child(`Writes to ${this.path}; after a successful save the previous version goes to programs.json.more-agents.bak (best-effort: a backup failure is reported, not blocking the write). Herdr reloads it by itself.`))
       .when(Boolean(this.error), (el) => el.child(div().p(8).rounded(6).bg(t.raised).text_color(t.blocked).text_size(12).child(this.error)))
       .child(v_flex().id("catalog").flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
         .children(list.map((a) => this.row(a, t)))

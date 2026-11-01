@@ -4,7 +4,7 @@
 
 Añade al menú + de Herdr App agentes que no vienen listos. Los eliges de un **catálogo de datos** (`mods/more-agents/catalog.js`) o añades uno propio con el formulario. Escribe en `~/.config/herdr-app/programs.json`:
 - fusiona con lo que ya tienes;
-- antes de cada escritura copia el archivo a `programs.json.more-agents.bak`;
+- tras un guardado correcto guarda la versión anterior en `programs.json.more-agents.bak`; el backup es best-effort, así que un fallo se avisa sin bloquear la escritura;
 - nunca pisa una entrada tuya que ya tenga `run`;
 - no escribe si el archivo cambió entre medias.
 
