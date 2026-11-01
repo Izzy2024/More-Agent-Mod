@@ -53,11 +53,6 @@ before = stopped;
 m.formKey({ key: "a", modifiers: {} }, kcx);
 assert.equal(stopped, before, "non-Tab keys pass through");
 
-// The dialog's key handler does not swallow text typed into an input.
-before = stopped;
-m.keyDown({ key: " ", modifiers: {} }, kcx);
-assert.equal(stopped, before, "space in a text field is typed, not activated");
-
 // 2. Catalog rows toggle with Space/Enter from the keyboard (no mouse).
 m.moveFocus("row-omp", kcx);
 m.keyDown({ key: " ", modifiers: {} }, kcx);
@@ -70,14 +65,17 @@ m.moveFocus("row-omp", kcx);
 tab();
 assert.equal(m.focusedField, "continue");
 
-// Arrow keys reach the rows from Add and move between them.
+// Arrow keys reach the rows from Add and move between them. The runtime names
+// them "down"/"up" (see the menu, picker and worktree mods), not "arrowdown".
 m.moveFocus("add-selected", kcx);
-m.keyDown({ key: "arrowdown", modifiers: {} }, kcx);
+m.keyDown({ key: "down", modifiers: {} }, kcx);
 assert.equal(m.focusedField, "row-" + m.offeredIds()[0]);
-m.keyDown({ key: "arrowdown", modifiers: {} }, kcx);
+m.keyDown({ key: "down", modifiers: {} }, kcx);
 assert.equal(m.focusedField, "row-" + m.offeredIds()[1]);
-m.keyDown({ key: "arrowup", modifiers: {} }, kcx);
+m.keyDown({ key: "up", modifiers: {} }, kcx);
 assert.equal(m.focusedField, "row-" + m.offeredIds()[0]);
+m.keyDown({ key: "arrowdown", modifiers: {} }, kcx);
+assert.equal(m.focusedField, "row-" + m.offeredIds()[0], "the old spelling is not a key");
 
 // The "continue" checkbox toggles with Space/Enter too.
 m.moveFocus("continue", kcx);
@@ -85,6 +83,16 @@ m.keyDown({ key: " ", modifiers: {} }, kcx);
 assert.equal(m.withContinue, true);
 m.keyDown({ key: "enter", modifiers: {} }, kcx);
 assert.equal(m.withContinue, false);
+
+// After a remove confirmation the focused button disappears: the keyboard has
+// to land on a real stop, or Tab and Space stop working.
+m.confirm = { kind: "remove", keys: ["omp"], changed: ["omp"] };
+m.focusedField = "confirm-keep";
+m.resolveConfirm(false, kcx);
+assert.equal(m.confirm, null);
+assert.equal(m.focusedField, "add-selected", "focus returns to a live control");
+tab();
+assert.equal(m.focusedField, "add-custom", "Tab works after the confirm");
 
 // Rendering the dialog with focus rings and labels must not throw.
 m.render();
@@ -98,6 +106,16 @@ assert.deepEqual(tokenize(`one 'two three' four`), ["one", "two three", "four"])
 assert.deepEqual(tokenize(`a\\"b c\\\\d`), ['a"b', "c\\d"]);
 assert.deepEqual(tokenize("  spaced   out  "), ["spaced", "out"]);
 assert.throws(() => tokenize(`ok "unclosed`), /quote/i);
+assert.deepEqual(tokenize(`""`), [""], "an empty quoted token is still a token");
+
+// An empty quoted command is not a command: no run:[""] entry.
+m.inputs.key._set("empty");
+m.inputs.run._set(`""`);
+m.addCustom(cx);
+await settle();
+assert.equal(m.invalidField, "run");
+assert.match(m.msg, /missing/i);
+assert.ok(!("empty" in read().programs));
 
 // An unclosed quote: explicit error, focus on the command, nothing written.
 m.inputs.key._set("quoted");

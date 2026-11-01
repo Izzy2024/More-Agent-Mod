@@ -116,6 +116,7 @@ export default class MoreAgents extends View {
       "confirm-yes": handle(), "confirm-keep": handle(),
     };
     this.confirm = null;        // pending question: { kind: "overwrite" | "remove", ... }
+    this.rootHandle = handle();
     this.rowHandles = {};
     if (typeof cx.focus_handle === "function") {
       for (const a of CATALOG) if (a.status === "verified") this.rowHandles[a.id] = cx.focus_handle();
@@ -126,6 +127,10 @@ export default class MoreAgents extends View {
       this.inputs[k].on("change", () => { if (this.invalidField === k) this.invalidField = null; });
     }
     this.inputs.key.focus();
+    // Focus is asked once on mount and once after the window settles: the other
+    // shipped mods that take keyboard input do the same, because the first call
+    // can land before the dialog exists.
+    if (typeof cx.timer?.after === "function") cx.timer.after(600, () => this.inputs.key.focus());
     this.inputs.run.on("submit", (_e, cx) => this.addCustom(cx));
     cx.spawn(async (cx) => { await this.load(); cx.notify(); await this.detect(); cx.notify(); });
   }
@@ -261,7 +266,7 @@ export default class MoreAgents extends View {
     for (const k of bases) {
       const a = this.agentOf(k);
       const hint = a?.install || a?.docs || "";
-      parts.push(`Added ${k}; it will show in the + menu once you install \`${binOf(k)}\`${hint ? ` (${hint})` : ""}.`);
+      parts.push(`Added ${k}; it shows in the + menu once \`${binOf(k)}\` is on your PATH${hint ? ` (${hint})` : ""}.`);
     }
     return { text: parts.join(" "), allReady: later.length === 0 };
   }
@@ -411,6 +416,7 @@ export default class MoreAgents extends View {
             r.warning,
           ].filter(Boolean).join(" ");
           this.selected.clear();
+          if (r.changed.length) this.moveFocus("add-selected", cx);
         }
       } catch (e) {
         this.msg = `Could not remove from programs.json: ${errText(e)}.`;
@@ -463,7 +469,7 @@ export default class MoreAgents extends View {
     } catch (e) {
       return this.fail("run", e.message ?? String(e), cx);
     }
-    if (!argv.length) return this.fail("run", "The command is missing.", cx);
+    if (!argv.length || !argv[0]) return this.fail("run", "The command is missing.", cx);
     // No match: Herdr derives the program from run[0]. A wrapper (npx, uvx,
     // python…) would be mislabelled by a match of our own.
     const entry = { name: name || key, icon: "icons/agent.svg", ...TILE, run: argv };
@@ -515,8 +521,10 @@ export default class MoreAgents extends View {
     this.confirm = null;
     if (!c) return;
     if (c.kind === "remove") {
+      this.moveFocus("add-selected", cx); // the confirm buttons are gone
       if (overwrite) this.remove(c.keys, cx, true);
-      else { this.msg = "Kept."; cx.notify(); }
+      else this.msg = "Kept.";
+      cx.notify();
       return;
     }
     if (!overwrite) {
@@ -569,10 +577,10 @@ export default class MoreAgents extends View {
   // from Add and move between them. Text fields keep their own keys.
   keyDown(e, cx) {
     if (e.key === "tab") { this.formKey(e, cx); return; }
-    if (e.key === "arrowdown" || e.key === "arrowup") {
+    if (e.key === "down" || e.key === "up") {
       const ids = this.offeredIds();
       if (!ids.length) return;
-      const down = e.key === "arrowdown";
+      const down = e.key === "down";
       if (this.focusedField === "add-selected") this.moveFocus(`row-${down ? ids[0] : ids[ids.length - 1]}`, cx);
       else if (this.focusedField.startsWith("row-")) {
         const cur = ids.indexOf(this.focusedField.slice(4));
@@ -611,7 +619,11 @@ export default class MoreAgents extends View {
       .when(this.handles[id], (el) => el.track_focus(this.handles[id]))
       .hover((s) => s.opacity(0.88))
       // stop_propagation: the click must not also reach the row (clicks bubble up to parents).
-      .on_click((_e, cx) => { cx.stop_propagation(); this.moveFocus(id, cx); if (!this.busy) onClick(cx); })
+      .on_click((_e, cx) => {
+        cx.stop_propagation();
+        if (this.inputs[id] || this.handles[id] || id.startsWith("row-")) this.moveFocus(id, cx);
+        if (!this.busy) onClick(cx);
+      })
       .child(label);
   }
 
@@ -675,7 +687,7 @@ export default class MoreAgents extends View {
     const pv = this.runPreview();
     const n = this.selectable().length;
     return v_flex().size_full().bg(t.popover).p(14).gap(8).text_size(13)
-      .id("more-agents").role("dialog").accessibility_label("More agents for the + menu")
+      .id("more-agents").track_focus(this.rootHandle).role("dialog").accessibility_label("More agents for the + menu")
       // Keys travel the focus path, so one handler here covers inputs and controls.
       .on_key_down((e, cx) => this.keyDown(e, cx))
       .child(h_flex().justify_between().items_center()

@@ -23,8 +23,8 @@ assert.ok(fs.existsSync(P + ".more-agents.bak")); assert.ok(JSON.parse(fs.readFi
 console.log("msg:", m.msg);
 // Install-aware message: omp is on the PATH (stub exec), command-code and droid are not.
 assert.match(m.msg, /omp, omp-continue: now show in the \+ menu/);
-assert.match(m.msg, /Added command-code; it will show in the \+ menu once you install `command-code`/);
-assert.match(m.msg, /Added droid; it will show .*`droid`/); assert.ok(!/Added droid-continue/.test(m.msg));
+assert.match(m.msg, /Added command-code; it shows in the \+ menu once `command-code` is on your PATH/);
+assert.match(m.msg, /Added droid; it shows .*`droid`/); assert.ok(!/Added droid-continue/.test(m.msg));
 assert.equal(m.selected.size, 0, "selection cleared after add");
 assert.equal(notes.at(-1).level, "info");
 // The counter only counts what can be added.
