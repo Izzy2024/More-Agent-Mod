@@ -46,10 +46,4 @@ node scripts/validate-catalog.mjs [--icons <herdr-app>/defaults/icons --builtin 
 node scripts/smoke-test.mjs
 ```
 
-## Publicar
-
-1. Crea un repo público con esta carpeta.
-2. Añade el topic `herdr-mod`.
-3. Aparece en herdr.dev/mods → Community.
-
-Estado: `herdr-app check` pasa y el diálogo abre y escribe programs.json en Herdr App 0.1.10 (Linux). Falta probar los clics a mano.
+Estado: `herdr-app check` pasa y el diálogo se probó de punta a punta (añadir, quitar, menú +, formulario personalizado) en Herdr App 0.1.10 en Linux.
