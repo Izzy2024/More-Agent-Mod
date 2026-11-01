@@ -40,14 +40,25 @@ export default class MoreAgents extends View {
       run: InputState.new({ placeholder: "command, e.g. my-agent --flag" }),
     };
     // Herdr doesn't move focus with Tab inside a mod dialog (its window doesn't
-    // register gpui-shell's Tab action), so the form does it itself with the
-    // public API: on_key_down + InputState.focus().
-    this.order = ["key", "name", "run"];
-    this.focusedField = null;
-    for (const k of this.order) {
+    // register gpui-shell's Tab action), so the dialog does it itself with the
+    // public API: on_key_down + focus handles. It doesn't wrap: at either end
+    // Tab leaves the dialog.
+    this.order = ["key", "name", "run", "continue", "add-selected", "add-custom", "close"];
+    this.focusedField = "key";
+    this.invalidField = null;
+    // cx.focus_handle() belongs in init, never in render.
+    const handle = () => (typeof cx.focus_handle === "function" ? cx.focus_handle() : null);
+    this.handles = { continue: handle(), "add-selected": handle(), "add-custom": handle(), close: handle() };
+    this.rowHandles = {};
+    if (typeof cx.focus_handle === "function") {
+      for (const a of CATALOG) if (a.status === "verified") this.rowHandles[a.id] = cx.focus_handle();
+    }
+    for (const k of ["key", "name", "run"]) {
       this.inputs[k].on("focus", () => { this.focusedField = k; });
       this.inputs[k].on("blur", () => { if (this.focusedField === k) this.focusedField = null; });
+      this.inputs[k].on("change", () => { if (this.invalidField === k) this.invalidField = null; });
     }
+    this.inputs.key.focus();
     this.inputs.run.on("submit", (_e, cx) => this.addCustom(cx));
     cx.spawn(async (cx) => { await this.load(); cx.notify(); await this.detect(); cx.notify(); });
   }
@@ -199,31 +210,100 @@ export default class MoreAgents extends View {
     this.addEntries(pairs, cx);
   }
 
+  // Marks the offending field, moves the keyboard there, and says why.
+  fail(field, text, cx) {
+    this.invalidField = field;
+    this.msg = text;
+    this.moveFocus(field, cx);
+    cx?.notify?.();
+  }
+
   addCustom(cx) {
+    this.invalidField = null;
     const key = this.inputs.key.value().trim().toLowerCase();
     const name = this.inputs.name.value().trim();
     const argv = this.inputs.run.value().trim().split(/\s+/).filter(Boolean);
-    if (!KEY_RE.test(key)) { this.msg = "Invalid key: lowercase letters, digits, . _ - (max. 32)."; cx.notify(); return; }
-    if (!argv.length) { this.msg = "The command is missing."; cx.notify(); return; }
+    if (!KEY_RE.test(key)) return this.fail("key", "Invalid key: lowercase letters, digits, . _ - (max. 32).", cx);
+    if (!argv.length) return this.fail("run", "The command is missing.", cx);
     this.addEntries([[key, { name: name || key, icon: "icons/agent.svg", ...TILE, match: [argv[0]], run: argv }]], cx);
     for (const i of Object.values(this.inputs)) i.set_value("");
   }
 
-  // Tab / Shift+Tab between key → name → command.
+  // Verified agents that can still be added, in the list's order.
+  offeredIds() {
+    return CATALOG.filter((a) => a.status === "verified" && !this.table?.programs?.[a.id]?.run?.length).map((a) => a.id);
+  }
+
+  // Moves the keyboard to an input or to a control that tracks a focus handle.
+  moveFocus(id, cx) {
+    this.focusedField = id;
+    if (this.inputs[id]) this.inputs[id].focus();
+    else if (this.handles[id]) this.handles[id].focus();
+    else if (id.startsWith("row-")) this.rowHandles[id.slice(4)]?.focus();
+    cx?.notify?.();
+  }
+
+  // Tab / Shift+Tab through key → name → run → continue → Add → Add custom →
+  // Close. At either end it stops handling Tab, so the key leaves the dialog.
   formKey(e, cx) {
-    if (e.key !== "tab" || !this.focusedField) return;
-    const i = this.order.indexOf(this.focusedField);
-    const step = e.modifiers?.shift ? this.order.length - 1 : 1;
+    if (e.key !== "tab") return;
+    const order = this.order;
+    let i = order.indexOf(this.focusedField);
+    // Rows sit between the command and the continue checkbox, but are not Tab
+    // stops themselves.
+    if (i < 0 && this.focusedField.startsWith("row-")) i = order.indexOf("run");
+    if (i < 0) return;
+    const j = i + (e.modifiers?.shift ? -1 : 1);
+    if (j < 0 || j >= order.length) return;
     cx.stop_propagation();
-    this.inputs[this.order[(i + step) % this.order.length]].focus();
+    this.moveFocus(order[j], cx);
+  }
+
+  // Space/Enter activate the focused control; arrows reach the catalog rows
+  // from Add and move between them. Text fields keep their own keys.
+  keyDown(e, cx) {
+    if (e.key === "tab") { this.formKey(e, cx); return; }
+    if (e.key === "arrowdown" || e.key === "arrowup") {
+      const ids = this.offeredIds();
+      if (!ids.length) return;
+      const down = e.key === "arrowdown";
+      if (this.focusedField === "add-selected") this.moveFocus(`row-${down ? ids[0] : ids[ids.length - 1]}`, cx);
+      else if (this.focusedField.startsWith("row-")) {
+        const cur = ids.indexOf(this.focusedField.slice(4));
+        const next = cur < 0 ? 0 : Math.min(Math.max(cur + (down ? 1 : -1), 0), ids.length - 1);
+        this.moveFocus(`row-${ids[next]}`, cx);
+      } else return;
+      cx.stop_propagation();
+      return;
+    }
+    if (e.key !== " " && e.key !== "space" && e.key !== "enter") return;
+    if (this.inputs[this.focusedField]) return; // typing, not activating
+    if (this.activate(this.focusedField, cx)) cx.stop_propagation();
+  }
+
+  activate(id, cx) {
+    if (id === "continue") { this.withContinue = !this.withContinue; cx?.notify?.(); return true; }
+    if (id === "add-selected") { this.addSelected(cx); return true; }
+    if (id === "add-custom") { this.addCustom(cx); return true; }
+    if (id === "close") { closeOverlay(props().overlay); return true; }
+    if (!id.startsWith("row-")) return false;
+    const a = CATALOG.find((x) => x.id === id.slice(4));
+    if (!a || !this.offeredIds().includes(a.id)) return false;
+    if (this.selected.has(a.id)) this.selected.delete(a.id); else this.selected.add(a.id);
+    cx?.notify?.();
+    return true;
   }
 
   button(id, label, onClick, t, primary = false) {
+    const focused = this.focusedField === id;
     return div().id(id).h(26).px(10).flex().flex_none().items_center().rounded(6).text_size(12).cursor_pointer()
       .bg(primary ? t.solid : t.raised).text_color(primary ? t.solid_foreground : t.foreground)
+      .border_1().border_color(focused ? t.accent : primary ? t.solid : t.raised)
+      .role("button").accessibility_label(label)
+      .when(this.handles[id], (el) => el.track_focus(this.handles[id]))
       .hover((s) => s.opacity(0.88))
       // stop_propagation: the click must not also reach the row (clicks bubble up to parents).
-      .on_click((_e, cx) => { cx.stop_propagation(); if (!this.busy) onClick(cx); })
+      .on_click((_e, cx) => { cx.stop_propagation(); this.moveFocus(id, cx); if (!this.busy) onClick(cx); })
       .child(label);
   }
 
@@ -240,17 +320,27 @@ export default class MoreAgents extends View {
     const offer = a.status === "verified" && !added && !yours;
     const inst = this.onPath[a.run[0]];
     const sel = this.selected.has(a.id);
+    const rowId = `row-${a.id}`;
+    const focused = this.focusedField === rowId;
     const state = builtin ? "already ships with Herdr" : added ? (inst === false ? "added · not installed yet" : "in the + menu") : yours ? "already in your programs.json" : a.status === "unverified" ? "unverified" : "";
     const hint = a.install || a.docs || "";
     const where = inst === true ? "installed"
       : inst === false ? (added ? `will show in the + menu once you install \`${a.run[0]}\`${hint ? " · " + hint : ""}` : `not installed${hint ? " · " + hint : ""}`)
       : "";
     return h_flex().id(`row-${a.id}`).px(8).py(5).gap(10).items_center().rounded(8)
-      .when(offer, (el) => el.cursor_pointer().hover((s) => s.bg(t.hover)).on_click((_e, cx) => {
-        // Current state, not the one captured at paint time.
-        if (this.selected.has(a.id)) this.selected.delete(a.id); else this.selected.add(a.id);
-        cx.notify();
-      }))
+      .border_1().border_color(focused ? t.accent : t.popover)
+      .role("list_box_option").aria_selected(sel)
+      .accessibility_label(`${a.name} · ${a.run.join(" ")}${state ? ` · ${state}` : ""}`)
+      // Rows are reachable with the arrow keys and Space/Enter, but they are not
+      // Tab stops: Tab goes from the command to the continue checkbox.
+      .when(offer, (el) => el.cursor_pointer().tab_stop(false)
+        .when(this.rowHandles[a.id], (e2) => e2.track_focus(this.rowHandles[a.id]))
+        .hover((s) => s.bg(t.hover)).on_click((_e, cx) => {
+          this.moveFocus(rowId, cx);
+          // Current state, not the one captured at paint time.
+          if (this.selected.has(a.id)) this.selected.delete(a.id); else this.selected.add(a.id);
+          cx.notify();
+        }))
       .child(offer ? this.check(sel, t) : div().w(16).flex_none())
       .child(v_flex().flex_1().min_w(0)
         .child(h_flex().gap(6).items_center()
@@ -268,32 +358,47 @@ export default class MoreAgents extends View {
     const custom = this.ours().filter((k) => !known.has(k) && !k.endsWith("-continue") && this.table?.programs?.[k]);
     const order = { verified: 0, unverified: 1, builtin: 2 };
     const list = [...CATALOG].sort((x, y) => order[x.status] - order[y.status] || x.name.localeCompare(y.name));
-    const field = (k) => Input.new(this.inputs[k]).h(30).px(8).rounded(6).border_1().border_color(t.input).bg(t.background).text_size(12).text_color(t.foreground);
+    const border = (k) => (this.invalidField === k ? t.blocked : this.focusedField === k ? t.accent : t.input);
+    const field = (k) => Input.new(this.inputs[k]).h(30).px(8).rounded(6).border_1().border_color(border(k)).bg(t.background).text_size(12).text_color(t.foreground);
+    const labeled = (k, label) => v_flex().gap(3).flex_1().min_w(0)
+      .child(div().text_size(10.5).text_color(this.invalidField === k ? t.blocked : t.muted).child(label))
+      .child(field(k));
+    const contFocused = this.focusedField === "continue";
     const n = this.selectable().length;
     return v_flex().size_full().bg(t.popover).p(14).gap(8).text_size(13)
+      .id("more-agents").role("dialog").accessibility_label("More agents for the + menu")
+      // Keys travel the focus path, so one handler here covers inputs and controls.
+      .on_key_down((e, cx) => this.keyDown(e, cx))
       .child(h_flex().justify_between().items_center()
         .child(div().text_size(14).font_semibold().text_color(t.foreground).child("More agents for the + menu"))
         .child(this.button("close", "Close", () => closeOverlay(props().overlay), t)))
       .child(div().text_size(11.5).text_color(t.muted).child(`Writes to ${this.path} (backup first in programs.json.more-agents.bak). Herdr reloads it by itself.`))
       .when(Boolean(this.error), (el) => el.child(div().p(8).rounded(6).bg(t.raised).text_color(t.blocked).text_size(12).child(this.error)))
-      .child(v_flex().id("catalog").flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
+      .child(v_flex().id("catalog").role("list_box").accessibility_label("Agents").flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
         .children(list.map((a) => this.row(a, t)))
         .children(custom.map((k) => {
           const e = this.table.programs[k];
           return this.row({ id: k, name: e.name ?? k, run: e.run ?? [k], status: "custom", docs: "" }, t);
         })))
       .child(h_flex().gap(8).items_center()
-        .child(h_flex().id("continue").gap(6).items_center().cursor_pointer()
-          .on_click((_e, cx) => { this.withContinue = !this.withContinue; cx.notify(); })
+        .child(h_flex().id("continue").gap(6).items_center().cursor_pointer().px(4).py(2).rounded(4)
+          .border_1().border_color(contFocused ? t.accent : t.popover)
+          .role("check_box").checked(this.withContinue).accessibility_label("Also add the \"continue\" variant (if it has one)")
+          .when(this.handles.continue, (el) => el.track_focus(this.handles.continue))
+          .on_click((_e, cx) => { this.moveFocus("continue", cx); this.withContinue = !this.withContinue; cx.notify(); })
           .child(this.check(this.withContinue, t))
           .child(div().text_size(12).text_color(t.foreground).child("Also add the \"continue\" variant (if it has one)")))
         .child(div().flex_1())
         .child(this.button("add-selected", n ? `Add ${n}` : "Add", (cx) => this.addSelected(cx), t, n > 0)))
       .child(div().h(1).bg(t.border))
-      .child(div().text_size(12).text_color(t.dim).child("Custom agent · Tab moves between fields, Enter in the command adds it"))
-      .child(v_flex().id("custom-form").gap(6).on_key_down((e, cx) => this.formKey(e, cx))
-        .child(h_flex().gap(6).child(div().w(150).child(field("key"))).child(div().flex_1().child(field("name"))))
-        .child(h_flex().gap(6).child(div().flex_1().child(field("run"))).child(this.button("add-custom", "Add", (cx) => this.addCustom(cx), t, true))))
-      .when(Boolean(this.msg), (el) => el.child(div().text_size(11.5).text_color(t.muted).child(this.msg)));
+      .child(div().text_size(12).text_color(t.dim).child("Custom agent · Tab: fields and buttons · ↑/↓ then Space/Enter: agents · Enter in the command adds it"))
+      .child(v_flex().id("custom-form").role("form").gap(6)
+        .child(h_flex().gap(6).items_end()
+          .child(div().w(150).child(labeled("key", "Key")))
+          .child(div().flex_1().min_w(0).child(labeled("name", "Display name"))))
+        .child(h_flex().gap(6).items_end()
+          .child(div().flex_1().min_w(0).child(labeled("run", "Command")))
+          .child(this.button("add-custom", "Add", (cx) => this.addCustom(cx), t, true))))
+      .when(Boolean(this.msg), (el) => el.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : t.muted).child(this.msg)));
   }
 }
