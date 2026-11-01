@@ -1,0 +1,17 @@
+{
+  "programs": {
+    "omp": {
+      "name": "Oh My Pi",
+      "icon": "icons/pi.svg",
+      "tint": true,
+      "tile": "#1c1d21",
+      "color": "#ffffff",
+      "match": ["omp"],
+      "run": ["omp"]
+    },
+    "command-code": {
+      "match": ["cmd", "cmdc", "command-code"],
+      "run": ["command-code"]
+    }
+  }
+}
