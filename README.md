@@ -6,7 +6,8 @@ Adds, to the Herdr App + menu, agents that do not come ready to use. You pick th
 - it merges with what you already have;
 - after a successful write it saves the previous version to `programs.json.more-agents.bak`; the backup is best-effort, so a failure is reported without blocking the write;
 - it never overwrites an entry of yours that already has `run`;
-- it does not write if the file changed in the meantime.
+- if the file changed in the meantime it re-reads it and retries once; a second conflict writes nothing;
+- the first write also saves the file as it was before the mod touched it to `programs.json.more-agents.orig.bak` (never replaced).
 
 ## Install
 
@@ -51,11 +52,11 @@ Herdr's + menu (the `new-menu` mod) shows every **installed** agent, meaning one
 
 That is why the dialog says: "Added X; it will show in the + menu once you install `cmd`", together with the install hint. As soon as the command exists, the agent appears; Herdr's cache takes up to 60 s.
 
-Keyboard: focus starts in the custom key field. Tab and Shift+Tab go key → name → command → continue → Add → Add custom → Close, and they do not wrap. In the catalog, ↑/↓ move between agents and Space/Enter tick them; Space/Enter also toggle continue and the buttons. Commands are split like a program, not like a shell: single and double quotes group and only `\"` and `\\` escape, so quoted paths survive; an unclosed quote is an error. The custom form never writes `match` (Herdr derives it from `run[0]`), and the keys `shell`, `program`, `agent` and anything ending in `-continue` are refused.
+Keyboard: focus starts in the custom key field. Tab and Shift+Tab go key → name → command → continue → Add → Add custom → the Remove buttons of the added agents → Close, and they do not wrap. In the catalog, ↑/↓ move between agents and Space/Enter tick them; Space/Enter also toggle continue and the buttons. Commands are split like a program, not like a shell: single and double quotes group and only `\"` and `\\` escape, so quoted paths survive; an unclosed quote is an error. The custom form never writes `match` (Herdr derives it from `run[0]`), and the keys `shell`, `program`, `agent` and anything ending in `-continue` are refused.
 
 ## Try it locally
 
-1. Copy `mods/more-agents/` to `~/.config/herdr-app/mods/more-agents/`.
+1. `node scripts/install.mjs` (or copy `mods/more-agents/` to `~/.config/herdr-app/mods/more-agents/` yourself).
 2. Validate with `herdr-app check ~/.config/herdr-app/mods/more-agents`.
 3. Open it from the command palette: `mod.open` → `more-agents`. You can also merge `keys.json` into yours.
 4. Check for errors with `herdr-app status`, and take the screenshot for `preview.png` with `herdr-app shot`.
