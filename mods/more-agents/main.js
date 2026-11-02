@@ -88,9 +88,13 @@ function fingerprint(entry) {
 }
 
 // The programs.json entry for a catalog agent (and its continue variant).
+function continueEntry(a) {
+  return [`${a.id}-continue`, { name: `${a.name} · continue`, icon: a.icon, ...TILE, run: a.continue }];
+}
+
 function entries(a, withContinue) {
   const out = [[a.id, { name: a.name, icon: a.icon, ...TILE, ...(a.match ? { match: a.match } : {}), run: a.run }]];
-  if (withContinue && a.continue) out.push([`${a.id}-continue`, { name: `${a.name} · continue`, icon: a.icon, ...TILE, run: a.continue }]);
+  if (withContinue && a.continue) out.push(continueEntry(a));
   return out;
 }
 
@@ -262,6 +266,14 @@ export default class MoreAgents extends View {
       const a = CATALOG.find((x) => x.id === id);
       return Boolean(a) && a.status === "verified" && !runOf(this.table?.programs?.[id]);
     });
+  }
+
+  // The continue variant is offered only when the catalog documents it, the
+  // base is present, and the variant is missing. Custom keys never have one.
+  canAddContinue(a) {
+    return Boolean(a?.continue) && a.status === "verified" &&
+      Boolean(runOf(this.table?.programs?.[a.id])) &&
+      !runOf(this.table?.programs?.[`${a.id}-continue`]);
   }
 
   // Herdr's + menu (mods/new-menu) shows ALL installed agents and, of the ones not
@@ -479,6 +491,12 @@ export default class MoreAgents extends View {
     this.addEntries(pairs, cx);
   }
 
+  // Adds only the documented continue variant; the base stays as it is.
+  addContinue(a, cx) {
+    if (!this.canAddContinue(a)) return false;
+    return this.addEntries([continueEntry(a)], cx);
+  }
+
   // Marks the offending field, moves the keyboard there, and says why.
   fail(field, text, cx) {
     this.invalidField = field;
@@ -586,6 +604,26 @@ export default class MoreAgents extends View {
     return CATALOG.filter((a) => a.status === "verified" && !runOf(this.table?.programs?.[a.id])).map((a) => a.id);
   }
 
+  // Actions rendered in rows, in the same order as the tab stops.
+  actionIds() {
+    const p = this.table?.programs ?? {};
+    const own = this.own();
+    const ids = [];
+    for (const a of CATALOG) {
+      const cont = `${a.id}-continue`;
+      if (own[a.id] !== undefined && runOf(p[a.id])) ids.push(`rm-${a.id}`);
+      if (own[cont] !== undefined && runOf(p[cont])) ids.push(`rm-continue-${a.id}`);
+      if (this.canAddContinue(a)) ids.push(`add-continue-${a.id}`);
+    }
+    const known = new Set(CATALOG.map((a) => a.id));
+    for (const key of Object.keys(own).sort()) {
+      if (known.has(key) || key.endsWith("-continue") || !runOf(p[key])) continue;
+      ids.push(`rm-${key}`);
+      if (own[`${key}-continue`] !== undefined && runOf(p[`${key}-continue`])) ids.push(`rm-continue-${key}`);
+    }
+    return [...new Set(ids)];
+  }
+
   // Moves the keyboard to an input or to a control that tracks a focus handle.
   moveFocus(id, cx) {
     this.focusedField = id;
@@ -647,6 +685,13 @@ export default class MoreAgents extends View {
     if (id === "close") { closeOverlay(props().overlay); return true; }
     if (id === "confirm-yes") { this.resolveConfirm(true, cx); return true; }
     if (id === "confirm-keep") { this.resolveConfirm(false, cx); return true; }
+    if (id.startsWith("rm-continue-")) { this.remove([`${id.slice("rm-continue-".length)}-continue`], cx); return true; }
+    if (id.startsWith("rm-")) { this.remove([id.slice("rm-".length)], cx); return true; }
+    if (id.startsWith("add-continue-")) {
+      const a = CATALOG.find((x) => x.id === id.slice("add-continue-".length));
+      if (a) this.addContinue(a, cx);
+      return true;
+    }
     if (!id.startsWith("row-")) return false;
     const a = CATALOG.find((x) => x.id === id.slice(4));
     if (!a || !this.offeredIds().includes(a.id)) return false;
@@ -681,6 +726,9 @@ export default class MoreAgents extends View {
     const hasRun = Boolean(runOf(this.table?.programs?.[a.id]));
     const added = this.ours().includes(a.id) && hasRun;
     const yours = hasRun && !added; // you already have it in your programs.json (e.g. set up by hand)
+    const contKey = `${a.id}-continue`;
+    const contAdded = this.ours().includes(contKey) && Boolean(runOf(this.table?.programs?.[contKey]));
+    const canAddContinue = this.canAddContinue(a);
     const builtin = a.status === "builtin";
     const offer = a.status === "verified" && !added && !yours;
     const inst = this.onPath[a.run[0]];
@@ -692,6 +740,10 @@ export default class MoreAgents extends View {
     const where = inst === true ? "installed"
       : inst === false ? (added ? `will show in the + menu once you install \`${a.run[0]}\`${hint ? " · " + hint : ""}` : `not installed${hint ? " · " + hint : ""}`)
       : "";
+    const actions = [];
+    if (added) actions.push(this.button(`rm-${a.id}`, "Remove", (cx) => this.remove([a.id], cx), t));
+    if (contAdded) actions.push(this.button(`rm-continue-${a.id}`, "Remove continue", (cx) => this.remove([contKey], cx), t));
+    if (canAddContinue) actions.push(this.button(`add-continue-${a.id}`, "Add continue", (cx) => this.addContinue(a, cx), t));
     return h_flex().id(`row-${a.id}`).px(8).py(5).gap(10).items_center().rounded(8)
       .border_1().border_color(focused ? t.accent : t.popover)
       .role("list_box_option").aria_selected(sel)
@@ -714,7 +766,7 @@ export default class MoreAgents extends View {
           .when(Boolean(state), (el) => el.child(div().text_size(10.5).px(5).rounded(4).bg(t.raised).text_color(t.muted).flex_none().child(state))))
         // No truncate: the install hint can be long (Goose) and wraps onto several lines.
         .when(Boolean(where) && !builtin, (el) => el.child(div().w_full().text_size(10.5).line_height("14px").text_color(inst ? t.dim : t.muted).child(where))))
-      .when(added, (el) => el.child(this.button(`rm-${a.id}`, "Remove", (cx) => this.remove([a.id, `${a.id}-continue`], cx), t)));
+      .children(actions);
   }
 
   render() {

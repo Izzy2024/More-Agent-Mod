@@ -156,3 +156,99 @@ console.log("ok D1.3: orig.bak lifecycle");
 console.log("ok D1.4: I/O errors are not reported as races");
 
 console.log("continue.test: D1 OK");
+
+// D2 ------------------------------------------------------------------------
+// 5. With the base already present, add only the documented continue variant.
+{
+  const base = { run: ["omp"], name: "Mine" };
+  const { m, cx, drain } = await boot({ programs: { omp: base } });
+  const a = m.agentOf("omp");
+  assert.equal(m.canAddContinue(a), true, "offered when the base is present");
+  assert.equal(m.activate("add-continue-omp", cx), true);
+  await drain();
+  const t = read();
+  assert.deepEqual(t.programs.omp, base, "base untouched and still the user's");
+  assert.deepEqual(t.programs["omp-continue"].run, ["omp", "--continue"]);
+  assert.ok(!owns("omp"), "the base was not ours");
+  assert.ok(owns("omp-continue"));
+  assert.equal(m.canAddContinue(a), false, "not offered twice");
+  assert.ok(m.actionIds().includes("rm-continue-omp"));
+  assert.ok(!m.actionIds().includes("add-continue-omp"));
+  assert.equal(t.programs["omp-continue"].match, undefined);
+}
+// No continue in the catalog: no action, ever. Nor for custom keys.
+{
+  const { m } = await boot({ programs: { cline: { run: ["cline"] } } });
+  const cline = m.agentOf("cline");
+  assert.equal(cline.continue, undefined);
+  assert.equal(m.canAddContinue(cline), false);
+  assert.ok(!m.actionIds().includes("add-continue-cline"));
+  assert.equal(m.canAddContinue({ id: "mine", status: "custom", run: ["mine"] }), false);
+  assert.equal(m.agentOf("mine-continue"), null, "no invented variants for custom keys");
+}
+console.log("ok D2.5: add continue only when documented and missing");
+
+// 6. Remove the base and the variant independently, each with its own print.
+{
+  const { m, cx, drain } = await boot({ programs: {} });
+  m.selected.add("omp");
+  m.withContinue = true;
+  m.addSelected(cx);
+  await drain();
+  assert.deepEqual(m.actionIds().filter((id) => id.includes("omp")), ["rm-omp", "rm-continue-omp"]);
+  const contFp = shared(OWN)["omp-continue"];
+  assert.equal(m.activate("rm-omp", cx), true);
+  await drain();
+  let t = read();
+  assert.ok(!t.programs.omp, "base removed");
+  assert.ok(t.programs["omp-continue"], "variant stayed");
+  assert.equal(shared(OWN)["omp-continue"], contFp, "variant fingerprint intact");
+  assert.equal(m.activate("rm-continue-omp", cx), true);
+  await drain();
+  t = read();
+  assert.ok(!t.programs["omp-continue"]);
+  assert.deepEqual(shared(OWN), {});
+}
+{
+  const { m, cx, drain } = await boot({ programs: {} });
+  m.selected.add("omp");
+  m.withContinue = true;
+  m.addSelected(cx);
+  await drain();
+  const baseFp = shared(OWN).omp;
+  assert.equal(m.activate("rm-continue-omp", cx), true);
+  await drain();
+  const t = read();
+  assert.ok(t.programs.omp, "base stayed");
+  assert.ok(!t.programs["omp-continue"], "variant removed");
+  assert.equal(shared(OWN).omp, baseFp, "base fingerprint intact");
+}
+// A changed variant still goes through Remove anyway / Keep, and only removes
+// that key when confirmed.
+{
+  const { m, cx, drain } = await boot({ programs: {} });
+  m.selected.add("omp");
+  m.withContinue = true;
+  m.addSelected(cx);
+  await drain();
+  const edited = read();
+  edited.programs["omp-continue"].name = "Edited continue";
+  fs.writeFileSync(P, JSON.stringify(edited, null, 2));
+  m.remove(["omp-continue"], cx);
+  await drain();
+  let t = read();
+  assert.ok(t.programs.omp, "base untouched");
+  assert.ok(t.programs["omp-continue"], "changed variant kept until confirmed");
+  assert.equal(m.confirm?.kind, "remove");
+  assert.deepEqual(m.confirm.keys, ["omp-continue"]);
+  assert.match(m.msg, /changed since it was added|unknown ownership/i);
+  m.remove(m.confirm.keys, cx, true);
+  await drain();
+  t = read();
+  assert.ok(t.programs.omp, "base still there");
+  assert.ok(!t.programs["omp-continue"], "confirmed variant removed");
+  assert.ok(owns("omp") && !owns("omp-continue"));
+}
+console.log("ok D2.6: base and continue remove independently");
+
+console.log("continue.test: D1+D2 OK");
