@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Validate catalog
+        run: node scripts/validate-catalog.mjs
+
+      - name: Smoke tests
+        run: node scripts/smoke-test.mjs
+
+      # No herdr-app checkout in CI: build a local fixture from the catalog,
+      # then check that --icons and --builtin really reject bad data.
+      - name: Validate with a local fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$(mktemp -d)"
+          mkdir -p "$fixture/icons"
+          node - "$fixture" <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const out = process.argv[2];
+          const text = fs.readFileSync("mods/more-agents/catalog.js", "utf8");
+          const body = text.replace(/^(\s*\/\/[^\n]*\n)*/, "");
+          const list = JSON.parse(body.match(/^\s*export default\s+([\s\S]*?);\s*$/)[1]);
+          const programs = { programs: {} };
+          for (const e of list) {
+            if (e.icon.startsWith("icons/")) {
+              fs.writeFileSync(path.join(out, "icons", e.icon.slice("icons/".length)), '<svg xmlns="http://www.w3.org/2000/svg"/>\n');
+            }
+            if (e.status === "builtin") programs.programs[e.id] = { run: e.run };
+          }
+          fs.writeFileSync(path.join(out, "programs.json"), JSON.stringify(programs, null, 2));
+          NODE
+          node scripts/validate-catalog.mjs --icons "$fixture/icons" --builtin "$fixture/programs.json"
+
+          rm "$fixture/icons/agent.svg"
+          if node scripts/validate-catalog.mjs --icons "$fixture/icons" --builtin "$fixture/programs.json"; then
+            echo "validator accepted a missing icon" >&2
+            exit 1
+          fi
+
+          node - "$fixture" <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const out = process.argv[2];
+          const programs = JSON.parse(fs.readFileSync(path.join(out, "programs.json"), "utf8"));
+          delete programs.programs.gemini;
+          fs.writeFileSync(path.join(out, "programs-incomplete.json"), JSON.stringify(programs, null, 2));
+          NODE
+          if node scripts/validate-catalog.mjs --icons "$fixture/icons" --builtin "$fixture/programs-incomplete.json"; then
+            echo "validator accepted a builtin Herdr does not ship" >&2
+            exit 1
+          fi
+
+      - name: herdr-app check (only if installed)
+        shell: bash
+        run: |
+          if command -v herdr-app >/dev/null 2>&1; then
+            herdr-app check mods/more-agents
+          else
+            echo "herdr-app is not installed; skipping"
+          fi

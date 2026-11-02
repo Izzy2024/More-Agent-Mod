@@ -12,6 +12,7 @@ const iconsDir = opt("--icons");
 const builtinPath = opt("--builtin");
 const here = dirname(fileURLToPath(import.meta.url));
 const file = resolve(args[0] ?? join(here, "..", "mods", "more-agents", "catalog.js"));
+const modRoot = dirname(file);
 
 const errors = [];
 const err = (where, msg) => errors.push(`${where}: ${msg}`);
@@ -23,12 +24,23 @@ if (!m) { console.error(`${file}: must be // comments followed by \`export defau
 let list;
 try { list = JSON.parse(m[1]); } catch (e) { console.error(`${file}: the body is not strict JSON: ${e.message}`); process.exit(1); }
 
-const KEYS = new Set(["id", "name", "run", "match", "continue", "install", "docs", "icon", "status", "source", "note"]);
+const KEYS = new Set(["id", "name", "run", "match", "continue", "install", "docs", "icon", "status", "source", "checked", "note"]);
 const STATUS = new Set(["verified", "unverified", "builtin"]);
 const ID = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 const URL_RE = /^https:\/\/\S+$/;
+const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+// Icons are paths in the app home: Herdr's own `icons/` or this mod's folder.
+const HERDR_ICON = /^icons\/[a-z0-9._-]+\.svg$/;
+const MOD_ICON = /^mods\/more-agents\/icons\/[a-z0-9._-]+\.svg$/;
 const argv = (v) => Array.isArray(v) && v.length > 0 && v.every((s) => typeof s === "string" && s.length > 0);
 const strs = (v) => Array.isArray(v) && v.every((s) => typeof s === "string" && s.length > 0 && !/\s/.test(s));
+const isDate = (v) => {
+  const d = DATE_RE.exec(v ?? "");
+  if (!d) return false;
+  const [y, mo, day] = [Number(d[1]), Number(d[2]), Number(d[3])];
+  const dt = new Date(Date.UTC(y, mo - 1, day));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === day;
+};
 
 const builtin = builtinPath ? JSON.parse(readFileSync(builtinPath, "utf8")).programs ?? {} : null;
 
@@ -54,8 +66,15 @@ for (const [i, e] of (Array.isArray(list) ? list : []).entries()) {
   if (typeof e.docs !== "string" || !URL_RE.test(e.docs)) err(at, "docs: URL https");
   if (typeof e.source !== "string" || !URL_RE.test(e.source)) err(at, "source: https URL the command comes from");
   if (!STATUS.has(e.status)) err(at, `status: ${[...STATUS].join(" | ")}`);
-  if (typeof e.icon !== "string" || !/^icons\/[a-z0-9._-]+\.svg$/.test(e.icon)) err(at, 'icon: "icons/<name>.svg" from Herdr\'s icons');
-  else if (iconsDir && !existsSync(join(iconsDir, e.icon.slice("icons/".length)))) err(at, `icon ${e.icon} does not exist in ${iconsDir}`);
+  if (e.status === "verified" && e.checked === undefined) err(at, "checked: verified entries need the date their source was reviewed");
+  if (e.checked !== undefined && !isDate(e.checked)) err(at, 'checked: "YYYY-MM-DD"');
+  if (typeof e.icon !== "string" || !(HERDR_ICON.test(e.icon) || MOD_ICON.test(e.icon))) {
+    err(at, 'icon: "icons/<name>.svg" (Herdr) or "mods/more-agents/icons/<name>.svg" (this mod)');
+  } else if (MOD_ICON.test(e.icon)) {
+    if (!existsSync(join(modRoot, e.icon.slice("mods/more-agents/".length)))) err(at, `icon ${e.icon} does not exist in ${modRoot}`);
+  } else if (iconsDir && !existsSync(join(iconsDir, e.icon.slice("icons/".length)))) {
+    err(at, `icon ${e.icon} does not exist in ${iconsDir}`);
+  }
   if (e.note !== undefined && typeof e.note !== "string") err(at, "note: text");
   if (builtin && typeof e.id === "string") {
     const b = builtin[e.id];
