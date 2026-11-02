@@ -38,6 +38,8 @@ m.formKey({ key: "tab", modifiers: { shift: true } }, kcx); assert.equal(m.focus
 m.focusedField = "run"; m.formKey({ key: "tab", modifiers: {} }, kcx); assert.equal(m.focusedField, "continue"); assert.equal(stopped, 3);
 m.formKey({ key: "a", modifiers: {} }, kcx); assert.equal(stopped, 3, "other keys pass through");
 m.inputs.key._set("My-Agent"); m.inputs.run._set("foo --bar"); m.addCustom(cx); await Promise.all(spawned.splice(0));
+assert.equal(m.confirm?.kind, "path-missing", "foo is not on PATH; it asks first");
+m.resolveConfirm(true, cx); await Promise.all(spawned.splice(0));
 assert.deepEqual(JSON.parse(fs.readFileSync(P,"utf8")).programs["my-agent"].run, ["foo", "--bar"]);
 m.render();
 m.selected.add("kilo");

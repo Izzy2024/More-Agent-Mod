@@ -11,13 +11,24 @@ export const Input = { new: () => chain() };
 export const InputState = { new: () => { let v = ""; const h = {}; return { value: () => v, set_value: (x) => { v = x; }, _set: (x) => { v = x; }, on: (e, f) => { h[e] = f; return true; }, _fire: (e) => h[e]?.({}, null), focused: false, focus() { this.focused = true; h.focus?.({}, null); } }; } };
 export const appHome = () => HOME, home = () => process.env.MA_SYS_HOME ?? "/home/u";
 const onPath = () => (process.env.MA_ONPATH ?? "omp aider").split(/\s+/).filter(Boolean);
+const RESOLVE_MARK = "more-agents-resolve-argv0";
 export const exec = async (c, a) => {
   if (process.env.MA_EXEC_FAIL === "1") throw new Error("spawn failed");
   const found = onPath();
+  if (c === "sh" && typeof a[1] === "string" && a[1].includes(RESOLVE_MARK)) {
+    const binary = a[3];
+    if (found.includes(binary)) return { code: 0, stdout: "EXACT\n" };
+    return { code: 0, stdout: "MISSING\n" };
+  }
   // Windows: one `where` per binary. POSIX: one sh -c with the binaries as arguments.
-  const wanted = c === "where" ? [a[0]] : a.slice(3);
+  if (c === "where") {
+    const b = a[0];
+    if (found.includes(b)) return { code: 0, stdout: `${b}\n` };
+    return { code: 1, stdout: "", stderr: "" };
+  }
+  const wanted = a.slice(3);
   const hits = wanted.filter((b) => found.includes(b));
-  return { code: hits.length ? 0 : 1, stdout: (c === "where" ? hits.join("\r\n") : hits.join("\n")) + (hits.length ? "\n" : ""), stderr: "" };
+  return { code: hits.length ? 0 : 1, stdout: hits.join("\n") + (hits.length ? "\n" : ""), stderr: "" };
 };
 export const readTextFile = async (p) => fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null;
 export const writeTextFile = async (p, text, expected) => {

@@ -191,6 +191,9 @@ m.inputs.name._set("My Agent");
 m.inputs.run._set(`"C:\\Program Files\\x.exe" --flag="a b"`);
 m.addCustom(cx);
 await settle();
+assert.ok(m.confirm && m.confirm.kind === "path-missing", "unknown binary asks first");
+m.resolveConfirm(true, cx); // Add anyway
+await settle();
 const p = read().programs["my-agent"];
 assert.deepEqual(p.run, ["C:\\Program Files\\x.exe", "--flag=a b"]);
 assert.ok(!("match" in p), "Herdr derives the program from run[0]");
@@ -208,4 +211,57 @@ assert.deepEqual(pv.argv, ["--flag=a b"]);
 m.inputs.run._set(`"x`);
 assert.match(m.runPreview().error, /quote/i);
 
-console.log("form.test: keyboard/focus + custom form OK; notifications:", notes.length);
+// 5. PATH resolution on addCustom: exact match; missing → confirm before save.
+const pathSettle = () => Promise.all(spawned.splice(0));
+const pathRead = () => JSON.parse(fs.readFileSync(P, "utf8"));
+const pathEnv = (bins) => { process.env.MA_ONPATH = bins; };
+
+// Exact match: no PATH warning, run[0] unchanged.
+pathEnv("empryo omp aider");
+m.onPath = {};
+await m.detect();
+m.inputs.key._set("empryo-agent");
+m.inputs.run._set("empryo --help");
+m.addCustom(cx);
+await pathSettle();
+let ep = pathRead().programs["empryo-agent"];
+assert.deepEqual(ep.run, ["empryo", "--help"]);
+assert.equal(m.msgLevel, "success");
+assert.ok(!/not on your PATH/i.test(m.msg));
+
+// Typo (Empryro vs empryo): missing — confirm before save, not a silent add.
+pathEnv("empryo omp aider");
+await m.detect();
+m.inputs.key._set("typo-agent");
+m.inputs.run._set("Empryro --help");
+m.addCustom(cx);
+await pathSettle();
+assert.ok(m.confirm && m.confirm.kind === "path-missing");
+assert.equal(m.focusedField, "confirm-keep");
+assert.match(m.msg, /Empryro.*not on your PATH.*will not show in the \+ menu/i);
+assert.ok(!("typo-agent" in pathRead().programs));
+
+// Missing command: confirm; Cancel leaves disk clean; Add anyway saves.
+pathEnv("omp aider");
+await m.detect();
+m.inputs.key._set("ghost-agent");
+m.inputs.run._set("ghost-cmd");
+m.addCustom(cx);
+await pathSettle();
+assert.ok(m.confirm && m.confirm.kind === "path-missing");
+assert.equal(m.focusedField, "confirm-keep");
+assert.ok(!("ghost-agent" in pathRead().programs));
+m.resolveConfirm(false, cx);
+await pathSettle();
+assert.ok(!("ghost-agent" in pathRead().programs));
+m.addCustom(cx);
+await pathSettle();
+m.resolveConfirm(true, cx);
+await pathSettle();
+ep = pathRead().programs["ghost-agent"];
+assert.deepEqual(ep.run, ["ghost-cmd"]);
+assert.equal(m.msgLevel, "warning", "add anyway keeps saying it is not on PATH");
+assert.match(m.msg, /Saved ghost-agent/);
+assert.match(m.msg, /not on your PATH/);
+
+console.log("form.test: keyboard/focus + custom form + PATH resolution OK; notifications:", notes.length);
