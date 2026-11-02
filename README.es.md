@@ -50,9 +50,11 @@ package.json                 npm run validate | test | check | install
 
 El menú + de Herdr (mod `new-menu`) enseña todos los agentes **instalados**, es decir, cuyo `run[0]` está en el PATH. De los no instalados solo enseña los dos primeros del orden interno, que siempre son Claude Code y Codex. Ningún campo de `programs.json` cambia esto.
 
-Por eso el diálogo avisa: "Added X; it will show in the + menu once you install `cmd`", junto con la pista de instalación. En cuanto el comando existe, el agente aparece; la caché de Herdr tarda hasta 60 s.
+Por eso cada fila lleva un badge de tres estados — `installed`, `not found on this PATH` o `could not check` cuando la propia detección falló — y la pista de instalación si falta el comando. En cuanto el comando existe, el agente aparece; la caché de Herdr tarda hasta 60 s. El toast solo dice cuántos se añadieron y cuántos necesitan instalación; las pistas por agente se quedan en el diálogo.
 
-Teclado: el foco empieza en el campo de clave del formulario propio. Tab y Shift+Tab van clave → nombre → comando → continue → Add → Add custom → los botones Remove de los agentes añadidos → Close, y no dan la vuelta. En el catálogo, ↑/↓ mueven entre agentes y Espacio/Enter los marcan; Espacio/Enter también conmutan continue y los botones. Los comandos se parten como un programa, no como un shell: comillas simples y dobles agrupan y solo `\"` y `\\` escapan, así que las rutas entre comillas sobreviven; una comilla sin cerrar es un error. El formulario propio no escribe `match` (Herdr lo deriva de `run[0]`), y se rechazan las claves `shell`, `program`, `agent` y cualquiera que acabe en `-continue`.
+Los mensajes llevan nivel (error, warning, success, info) y se pintan según él, un guardado en curso muestra "Saving…" y deshabilita los botones de guardar, y si `programs.json` no se puede leer o parsear el banner dice por qué y ofrece **Reload** (`load()` + `detect()`), en lugar de pedirte que reabras el diálogo.
+
+Teclado: el foco empieza en el campo de clave del formulario propio. Tab y Shift+Tab van clave → nombre → comando → continue → Add → Add custom → los botones Remove/Remove continue de los agentes añadidos → Reload (solo si el archivo está roto) → Close, y no dan la vuelta. En el catálogo, ↑/↓ mueven entre agentes y Espacio/Enter los marcan; Espacio/Enter también conmutan continue y los botones. Los comandos se parten como un programa, no como un shell: comillas simples y dobles agrupan y solo `\"` y `\\` escapan, así que las rutas entre comillas sobreviven; una comilla sin cerrar es un error. El formulario propio no escribe `match` (Herdr lo deriva de `run[0]`), y se rechazan las claves `shell`, `program`, `agent` y cualquiera que acabe en `-continue`.
 
 ## Probar en local
 

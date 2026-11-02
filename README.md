@@ -50,9 +50,11 @@ package.json                 npm run validate | test | check | install
 
 Herdr's + menu (the `new-menu` mod) shows every **installed** agent, meaning one whose `run[0]` is on the PATH. Of the agents that are not installed, it shows only the first two in its internal order, which are always Claude Code and Codex. No field in `programs.json` changes this.
 
-That is why the dialog says: "Added X; it will show in the + menu once you install `cmd`", together with the install hint. As soon as the command exists, the agent appears; Herdr's cache takes up to 60 s.
+That is why each row carries a three-state badge — `installed`, `not found on this PATH`, or `could not check` when the probe itself failed — and the install hint when the command is missing. As soon as the command exists, the agent appears; Herdr's cache takes up to 60 s. The toast only says how many were added and how many still need an install; the per-agent hints stay in the dialog.
 
-Keyboard: focus starts in the custom key field. Tab and Shift+Tab go key → name → command → continue → Add → Add custom → the Remove buttons of the added agents → Close, and they do not wrap. In the catalog, ↑/↓ move between agents and Space/Enter tick them; Space/Enter also toggle continue and the buttons. Commands are split like a program, not like a shell: single and double quotes group and only `\"` and `\\` escape, so quoted paths survive; an unclosed quote is an error. The custom form never writes `match` (Herdr derives it from `run[0]`), and the keys `shell`, `program`, `agent` and anything ending in `-continue` are refused.
+Messages carry a level (error, warning, success, info) and are painted accordingly, a save in progress shows "Saving…" and disables the save buttons, and if `programs.json` cannot be read or parsed the banner says why and offers **Reload** (`load()` + `detect()`), instead of asking you to reopen the dialog.
+
+Keyboard: focus starts in the custom key field. Tab and Shift+Tab go key → name → command → continue → Add → Add custom → the Remove/Remove continue buttons of the added agents → Reload (only while the file is broken) → Close, and they do not wrap. In the catalog, ↑/↓ move between agents and Space/Enter tick them; Space/Enter also toggle continue and the buttons. Commands are split like a program, not like a shell: single and double quotes group and only `\"` and `\\` escape, so quoted paths survive; an unclosed quote is an error. The custom form never writes `match` (Herdr derives it from `run[0]`), and the keys `shell`, `program`, `agent` and anything ending in `-continue` are refused.
 
 ## Try it locally
 

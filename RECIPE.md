@@ -21,7 +21,8 @@ Open it with `mod.open more-agents` (command palette) or the key in keys.json.
 - An entry you already have with a command is never replaced.
 - After a successful write, the previous version is saved to `programs.json.more-agents.bak`, and the first write keeps the pre-mod file as `programs.json.more-agents.orig.bak` (never replaced). Both are best-effort: a failure is reported without blocking the write.
 - The write only goes through if nobody changed the file since it was read; a stale write is retried once from the new snapshot, and a second conflict writes nothing.
-- A broken programs.json is never written; the dialog says so.
+- A broken programs.json is never written; the dialog names the failure (read, JSON, shape) and offers Reload instead of asking you to reopen it.
+- Rows carry a three-state PATH badge (`installed` / `not found on this PATH` / `could not check`), saves show "Saving…" with the buttons disabled, and the toast is a count ("Added 2; 1 needs install") while the dialog keeps the hints.
 
 Herdr reloads the table live, so new agents show in the + menu at once.
 
