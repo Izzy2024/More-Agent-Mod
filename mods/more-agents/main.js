@@ -71,6 +71,17 @@ function inferLevel(text) {
     return "success";
   return "info";
 }
+
+// A stale CAS is retried once; permission, space and other I/O errors are not.
+function writeErrorKind(e) {
+  const code = String(e?.code ?? "");
+  if (code === "ESTALE" || code === "EEXIST") return "stale";
+  if (["EACCES", "EPERM", "ENOSPC", "EROFS", "EDQUOT", "EMFILE", "ENFILE"].includes(code)) return "io";
+  const text = errText(e);
+  if (/permission denied|read-only|no space|quota|EACCES|EPERM|ENOSPC|EROFS/i.test(text)) return "io";
+  if (/\bstale\b|changed since it was read|changed in the meantime|snapshot/i.test(text)) return "stale";
+  return "io";
+}
 // Key-order-independent JSON, for comparing an entry with its merged result.
 function stableJson(v) {
   if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
@@ -90,9 +101,13 @@ function fingerprint(entry) {
 }
 
 // The programs.json entry for a catalog agent (and its continue variant).
+function continueEntry(a) {
+  return [`${a.id}-continue`, { name: `${a.name} · continue`, icon: a.icon, ...TILE, run: a.continue }];
+}
+
 function entries(a, withContinue) {
   const out = [[a.id, { name: a.name, icon: a.icon, ...TILE, ...(a.match ? { match: a.match } : {}), run: a.run }]];
-  if (withContinue && a.continue) out.push([`${a.id}-continue`, { name: `${a.name} · continue`, icon: a.icon, ...TILE, run: a.continue }]);
+  if (withContinue && a.continue) out.push(continueEntry(a));
   return out;
 }
 
@@ -132,6 +147,7 @@ export default class MoreAgents extends View {
   init(_props, cx) {
     this.path = `${appHome()}/programs.json`;
     this.backup = `${appHome()}/programs.json.more-agents.bak`;
+    this.orig = `${appHome()}/programs.json.more-agents.orig.bak`;
     this.raw = null;            // current text (null: does not exist)
     this.table = null;          // parsed JSON
     this.error = null;          // invalid file: nothing gets written
@@ -155,15 +171,22 @@ export default class MoreAgents extends View {
     this.invalidField = null;
     // cx.focus_handle() belongs in init, never in render.
     const handle = () => (typeof cx.focus_handle === "function" ? cx.focus_handle() : null);
+    this.handleFactory = handle;
     this.handles = {
       continue: handle(), "add-selected": handle(), "add-custom": handle(), close: handle(),
       "confirm-yes": handle(), "confirm-keep": handle(), reload: handle(),
     };
+    this.actionHandles = {};    // rm-<id>, rm-continue-<id>, add-continue-<id>
     this.confirm = null;        // pending question: { kind: "overwrite" | "remove", ... }
     this.rootHandle = handle();
     this.rowHandles = {};
     if (typeof cx.focus_handle === "function") {
-      for (const a of CATALOG) if (a.status === "verified") this.rowHandles[a.id] = cx.focus_handle();
+      for (const a of CATALOG) {
+        if (a.status === "verified") this.rowHandles[a.id] = cx.focus_handle();
+        this.actionHandles[`rm-${a.id}`] = cx.focus_handle();
+        this.actionHandles[`rm-continue-${a.id}`] = cx.focus_handle();
+        this.actionHandles[`add-continue-${a.id}`] = cx.focus_handle();
+      }
     }
     for (const k of ["key", "name", "run"]) {
       this.inputs[k].on("focus", () => { this.focusedField = k; });
@@ -197,6 +220,7 @@ export default class MoreAgents extends View {
       this.table = { programs: {} };
       this.error = null;
       this.reconcileOwn(this.table.programs);
+      this.ensureActionHandles(this.actionIds());
       return;
     }
     let parsed;
@@ -229,6 +253,7 @@ export default class MoreAgents extends View {
     this.table = parsed;
     this.error = null;
     this.reconcileOwn(programs);
+    this.ensureActionHandles(this.actionIds());
   }
 
   // Which catalog binaries are installed? A single `sh -c` (or `where` on Windows),
@@ -322,6 +347,14 @@ export default class MoreAgents extends View {
     });
   }
 
+  // The continue variant is offered only when the catalog documents it, the
+  // base is present, and the variant is missing. Custom keys never have one.
+  canAddContinue(a) {
+    return Boolean(a?.continue) && a.status === "verified" &&
+      Boolean(runOf(this.table?.programs?.[a.id])) &&
+      !runOf(this.table?.programs?.[`${a.id}-continue`]);
+  }
+
   // Herdr's + menu (mods/new-menu) shows ALL installed agents and, of the ones not
   // installed, only the first 2 in its internal order (Claude Code and Codex). An
   // added agent whose command is not on the PATH doesn't show until it's installed.
@@ -343,11 +376,9 @@ export default class MoreAgents extends View {
     return { text: parts.join(" "), allReady: later.length === 0, toast };
   }
 
-  // Read → change → write only if nobody touched it in between. The backup is
-  // best-effort and written after the CAS, so a failed write cannot destroy it.
-  async edit(change) {
-    await this.load();
-    if (this.error) { this.msg = this.error; return null; }
+  // One attempt: load is already done. It is re-runnable, so `change` must
+  // rebuild its ownership map from scratch on every call.
+  async prepareEdit(change) {
     const before = this.raw;
     const beforeOwn = this.own();
     let result;
@@ -358,7 +389,7 @@ export default class MoreAgents extends View {
       await this.load();
       return null;
     }
-    if (!result?.changed?.length) return result;
+    if (!result?.changed?.length) return { result, text: null, before, beforeOwn };
     let text;
     try {
       text = JSON.stringify(this.table, null, 2) + "\n";
@@ -367,37 +398,73 @@ export default class MoreAgents extends View {
       await this.load();
       return null;
     }
+    return { result, text, before, beforeOwn };
+  }
+
+  // Best-effort copies after a successful write: the pre-mod file once
+  // (.orig.bak, never replaced) and the previous version for every write.
+  async writeBackups(before) {
+    const warnings = [];
+    if (before == null) return warnings;
     try {
-      if (result.own) this.setOwn(result.own); // intent first; rolled back if the write fails
+      const old = await readTextFile(this.orig);
+      if (old == null) await writeTextFile(this.orig, before, null);
     } catch (e) {
-      try { this.setOwn(beforeOwn); } catch {}
-      this.msg = `Could not record ownership: ${errText(e)}. Nothing was written.`;
-      await this.load();
-      return null;
+      let exists = null;
+      try { exists = await readTextFile(this.orig); } catch {}
+      if (exists == null) warnings.push(`The original backup was not written: ${errText(e)}.`);
     }
     try {
-      await writeTextFile(this.path, text, before);
+      const old = await readTextFile(this.backup);
+      await writeTextFile(this.backup, before, old);
     } catch (e) {
-      try { this.setOwn(beforeOwn); } catch {}
-      const stale = /stale/i.test(errText(e));
-      const message = stale
-        ? "programs.json changed since it was read; nothing was written. Try again."
-        : `Could not write ${this.path}: ${errText(e)}. Nothing was written.`;
-      await this.load(); // show the file as it is now
-      this.msg = message;
-      return null;
+      warnings.push(`The backup was not written: ${errText(e)}.`);
     }
-    this.raw = text;
-    let warning = "";
-    if (before != null) {
+    return warnings;
+  }
+
+  // Read → change → write only if nobody touched it in between. One stale
+  // conflict is retried from the new snapshot; a second one is reported.
+  async edit(change) {
+    await this.load();
+    if (this.error) { this.msg = this.error; return null; }
+    let p = await this.prepareEdit(change);
+    if (!p) return null;
+    if (p.text == null) return p.result;
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const old = await readTextFile(this.backup);
-        await writeTextFile(this.backup, before, old);
+        if (p.result.own) this.setOwn(p.result.own); // intent first; rolled back if the write fails
       } catch (e) {
-        warning = `The backup was not written: ${errText(e)}.`;
+        try { this.setOwn(p.beforeOwn); } catch {}
+        this.msg = `Could not record ownership: ${errText(e)}. Nothing was written.`;
+        await this.load();
+        return null;
       }
+      try {
+        await writeTextFile(this.path, p.text, p.before);
+      } catch (e) {
+        try { this.setOwn(p.beforeOwn); } catch {}
+        const kind = writeErrorKind(e);
+        if (kind === "stale" && attempt === 0) {
+          await this.load(); // take the state the other writer left
+          if (this.error) { this.msg = this.error; return null; }
+          p = await this.prepareEdit(change);
+          if (!p) return null;
+          if (p.text == null) return p.result;
+          continue;
+        }
+        const message = kind === "stale"
+          ? "programs.json changed since it was read; nothing was written. Try again."
+          : `Could not write ${this.path}${e?.code ? ` (${e.code})` : ""}: ${errText(e)}. Nothing was written.`;
+        await this.load();
+        this.msg = message;
+        return null;
+      }
+      this.raw = p.text;
+      const warnings = await this.writeBackups(p.before);
+      return { ...p.result, warning: warnings.join(" ") };
     }
-    return { ...result, warning };
+    return null;
   }
 
   // Adds without overwriting: if your programs.json already has that key with run, it's left as is;
@@ -427,6 +494,7 @@ export default class MoreAgents extends View {
         });
         if (r) {
           ok = true;
+          this.ensureActionHandles(this.actionIds());
           if (r.changed.length) {
             await this.detect(); // the message depends on whether the command is installed
             const added = this.addedMessage(r.changed);
@@ -482,6 +550,7 @@ export default class MoreAgents extends View {
         if (needs) {
           this.confirm = needs;
           this.msg = `Changed since it was added (or unknown ownership): ${needs.changed.join(", ")}. Nothing was removed.`;
+          this.moveFocus("confirm-keep", cx);
         } else if (r) {
           this.msg = [
             r.changed.length ? `Removed from your programs.json: ${r.changed.join(", ")}.` : "Nothing to remove.",
@@ -504,6 +573,14 @@ export default class MoreAgents extends View {
     const pairs = CATALOG.filter((a) => ids.has(a.id)).flatMap((a) => entries(a, this.withContinue));
     if (!pairs.length) { this.say("warning", "Check at least one agent."); cx.notify(); return; }
     this.addEntries(pairs, cx);
+  }
+
+  // Adds only the documented continue variant; the base stays as it is.
+  addContinue(a, cx) {
+    if (!this.canAddContinue(a)) return false;
+    return this.addEntries([continueEntry(a)], cx, (ok) => {
+      if (ok) this.moveFocus("add-selected", cx);
+    });
   }
 
   // Marks the offending field, moves the keyboard there, and says why.
@@ -573,6 +650,7 @@ export default class MoreAgents extends View {
           await this.detect();
           const saved = [`Saved ${key} in your programs.json.`, r.warning].filter(Boolean).join(" ");
           this.say(r.warning ? "warning" : "success", saved);
+          this.ensureActionHandles(this.actionIds());
           notify({ title: "More agents", body: `Saved ${key}.`, level: r.warning ? "info" : "success" });
           for (const i of Object.values(this.inputs)) i.set_value("");
           this.invalidField = null;
@@ -614,27 +692,61 @@ export default class MoreAgents extends View {
     return CATALOG.filter((a) => a.status === "verified" && !runOf(this.table?.programs?.[a.id])).map((a) => a.id);
   }
 
+  // Row actions in render order. Remove buttons are Tab stops; Add continue
+  // stays a pointer action so the keyboard order stays short.
+  actionIds() {
+    const p = this.table?.programs ?? {};
+    const own = this.own();
+    const ids = [];
+    for (const a of CATALOG) {
+      const cont = `${a.id}-continue`;
+      if (own[a.id] !== undefined && runOf(p[a.id])) ids.push(`rm-${a.id}`);
+      if (own[cont] !== undefined && runOf(p[cont])) ids.push(`rm-continue-${a.id}`);
+      if (this.canAddContinue(a)) ids.push(`add-continue-${a.id}`);
+    }
+    const known = new Set(CATALOG.map((a) => a.id));
+    for (const key of Object.keys(own).sort()) {
+      if (known.has(key) || key.endsWith("-continue") || !runOf(p[key])) continue;
+      ids.push(`rm-${key}`);
+      if (own[`${key}-continue`] !== undefined && runOf(p[`${key}-continue`])) ids.push(`rm-continue-${key}`);
+    }
+    return [...new Set(ids)];
+  }
+
+  ensureActionHandles(ids) {
+    if (!this.handleFactory) return;
+    for (const id of ids) {
+      if (this.actionHandles[id]) continue;
+      const h = this.handleFactory();
+      if (h) this.actionHandles[id] = h;
+    }
+  }
+
   // Moves the keyboard to an input or to a control that tracks a focus handle.
   moveFocus(id, cx) {
     this.focusedField = id;
     if (this.inputs[id]) this.inputs[id].focus();
     else if (this.handles[id]) this.handles[id].focus();
     else if (id.startsWith("row-")) this.rowHandles[id.slice(4)]?.focus();
+    else {
+      this.ensureActionHandles([id]);
+      this.actionHandles[id]?.focus();
+    }
     cx?.notify?.();
   }
 
-  // The overwrite question adds two stops before Close while it is open.
-  // Reload is a stop only while the file is broken, so a healthy dialog keeps
-  // the same Tab order the keyboard tests walk.
+  // Remove buttons follow Add custom; the overwrite/remove question adds two
+  // stops before Close while it is open. Add continue is not a Tab stop, and
+  // Reload is one only while the file is broken.
   tabOrder() {
-    const order = this.confirm
-      ? [...this.order.slice(0, -1), "confirm-yes", "confirm-keep", "close"]
-      : [...this.order];
-    if (this.error) {
-      const at = order.indexOf("close");
-      order.splice(at < 0 ? order.length : at, 0, "reload");
-    }
-    return order;
+    const actions = this.actionIds().filter((id) => !id.startsWith("add-continue-"));
+    this.ensureActionHandles(actions);
+    const base = [...this.order.slice(0, -1), ...actions];
+    if (this.error) base.push("reload");
+    base.push("close");
+    return this.confirm
+      ? [...base.slice(0, -1), "confirm-yes", "confirm-keep", "close"]
+      : base;
   }
 
   // Tab / Shift+Tab through key → name → run → continue → Add → Add custom →
@@ -683,6 +795,13 @@ export default class MoreAgents extends View {
     if (id === "reload") { this.reload(cx); return true; }
     if (id === "confirm-yes") { this.resolveConfirm(true, cx); return true; }
     if (id === "confirm-keep") { this.resolveConfirm(false, cx); return true; }
+    if (id.startsWith("rm-continue-")) { this.remove([`${id.slice("rm-continue-".length)}-continue`], cx); return true; }
+    if (id.startsWith("rm-")) { this.remove([id.slice("rm-".length)], cx); return true; }
+    if (id.startsWith("add-continue-")) {
+      const a = CATALOG.find((x) => x.id === id.slice("add-continue-".length));
+      if (a) this.addContinue(a, cx);
+      return true;
+    }
     if (!id.startsWith("row-")) return false;
     const a = CATALOG.find((x) => x.id === id.slice(4));
     if (!a || !this.offeredIds().includes(a.id)) return false;
@@ -698,17 +817,18 @@ export default class MoreAgents extends View {
     const saves = id === "add-selected" || id === "add-custom" || id.startsWith("rm-");
     const locked = this.busy && saves;
     this.note(locked ? `disabled:${id}` : `button:${id}`);
+    const handle = this.handles[id] ?? this.actionHandles?.[id];
     let el = div().id(id).h(26).px(10).flex().flex_none().items_center().rounded(6).text_size(12)
       .bg(primary ? t.solid : t.raised).text_color(primary ? t.solid_foreground : t.foreground)
       .border_1().border_color(focused ? t.accent : primary ? t.solid : t.raised)
       .role("button").accessibility_label(label)
-      .when(this.handles[id], (node) => node.track_focus(this.handles[id]));
+      .when(handle, (node) => node.track_focus(handle));
     el = locked ? el.opacity(0.4).disabled(true).cursor_default() : el.cursor_pointer().hover((s) => s.opacity(0.88));
     return el
       // stop_propagation: the click must not also reach the row (clicks bubble up to parents).
       .on_click((_e, cx) => {
         cx.stop_propagation();
-        if (this.inputs[id] || this.handles[id] || id.startsWith("row-")) this.moveFocus(id, cx);
+        if (this.inputs[id] || handle || id.startsWith("row-")) this.moveFocus(id, cx);
         if (locked || (this.busy && id !== "close")) return;
         onClick(cx);
       })
@@ -724,7 +844,10 @@ export default class MoreAgents extends View {
   rowFacts(a) {
     const hasRun = Boolean(runOf(this.table?.programs?.[a.id]));
     const added = this.ours().includes(a.id) && hasRun;
-    const yours = hasRun && !added;
+    const yours = hasRun && !added; // you already have it in your programs.json (e.g. set up by hand)
+    const contKey = `${a.id}-continue`;
+    const contAdded = this.ours().includes(contKey) && Boolean(runOf(this.table?.programs?.[contKey]));
+    const canAddContinue = this.canAddContinue(a);
     const builtin = a.status === "builtin";
     const offer = a.status === "verified" && !added && !yours;
     const inst = this.onPath[a.run?.[0]];
@@ -735,16 +858,20 @@ export default class MoreAgents extends View {
       : a.status === "unverified" ? "unverified" : "";
     const hint = a.install || a.docs || "";
     const where = !builtin && inst === false && hint ? `${pathBadge} · ${hint}` : pathBadge;
-    return { added, yours, builtin, offer, inst, pathBadge, state, where };
+    return { added, yours, builtin, offer, inst, pathBadge, state, where, contKey, contAdded, canAddContinue };
   }
 
   row(a, t) {
-    const { added, builtin, offer, inst, state, where } = this.rowFacts(a);
+    const { added, builtin, offer, inst, state, where, contKey, contAdded, canAddContinue } = this.rowFacts(a);
     this.note(`${a.name} :: ${state} :: ${where}`);
     const sel = this.selected.has(a.id);
     const rowId = `row-${a.id}`;
     const focused = this.focusedField === rowId;
     const pathColor = inst === true ? t.done : inst === false ? t.muted : t.unknown;
+    const actions = [];
+    if (added) actions.push(this.button(`rm-${a.id}`, "Remove", (cx) => this.remove([a.id], cx), t));
+    if (contAdded) actions.push(this.button(`rm-continue-${a.id}`, "Remove continue", (cx) => this.remove([contKey], cx), t));
+    if (canAddContinue) actions.push(this.button(`add-continue-${a.id}`, "Add continue", (cx) => this.addContinue(a, cx), t));
     return h_flex().id(`row-${a.id}`).px(8).py(5).gap(10).items_center().rounded(8)
       .border_1().border_color(focused ? t.accent : t.popover)
       .role("list_box_option").aria_selected(sel)
@@ -766,8 +893,9 @@ export default class MoreAgents extends View {
           .when(Boolean(state), (el) => el.child(div().text_size(10.5).px(5).rounded(4).bg(t.raised).text_color(t.muted).flex_none().child(state))))
         // The command wraps on its own line so a long argv cannot push the row sideways.
         .child(div().w_full().min_w(0).text_size(11).text_color(t.dim).whitespace_normal().child(a.run.join(" ")))
+        // No truncate: the install hint can be long (Goose) and wraps onto several lines.
         .when(!builtin, (el) => el.child(div().w_full().min_w(0).text_size(10.5).line_height("14px").text_color(pathColor).whitespace_normal().child(where))))
-      .when(added, (el) => el.child(this.button(`rm-${a.id}`, "Remove", (cx) => this.remove([a.id, `${a.id}-continue`], cx), t)));
+      .children(actions);
   }
 
   render() {

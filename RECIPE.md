@@ -19,13 +19,13 @@ Open it with `mod.open more-agents` (command palette) or the key in keys.json.
 **Adding.** Tick agents and press Add. Each one becomes an entry in `~/.config/herdr-app/programs.json`, and everything else in that file is kept.
 - With "continue" ticked, a second entry starts the agent on its last session. This happens only where the agent documents a flag for it.
 - An entry you already have with a command is never replaced.
-- After a successful write, the previous version is saved to `programs.json.more-agents.bak`. The backup is best-effort: a failure is reported without blocking the write.
-- The write only goes through if nobody changed the file since it was read.
+- After a successful write, the previous version is saved to `programs.json.more-agents.bak`, and the first write keeps the pre-mod file as `programs.json.more-agents.orig.bak` (never replaced). Both are best-effort: a failure is reported without blocking the write.
+- The write only goes through if nobody changed the file since it was read; a stale write is retried once from the new snapshot, and a second conflict writes nothing.
 - A broken programs.json is never written; the dialog says so.
 
 Herdr reloads the table live, so new agents show in the + menu at once.
 
-**Removing.** Remove deletes only the entries this mod added.
+**Removing.** Remove deletes only the entries this mod added. The base entry and its `-continue` variant are separate actions (`Remove` / `Remove continue`, and `Add continue` next to an existing base), so you can keep one without the other.
 
 **Contributing.** The catalog is plain data in `mods/more-agents/catalog.js`, so new agents come in by pull request.
 

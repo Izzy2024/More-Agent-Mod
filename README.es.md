@@ -6,21 +6,26 @@ Añade al menú + de Herdr App agentes que no vienen listos. Los eliges de un **
 - fusiona con lo que ya tienes;
 - tras un guardado correcto guarda la versión anterior en `programs.json.more-agents.bak`; el backup es best-effort, así que un fallo se avisa sin bloquear la escritura;
 - nunca pisa una entrada tuya que ya tenga `run`;
-- no escribe si el archivo cambió entre medias.
+- si el archivo cambió entre medias lo relee y reintenta una vez; un segundo conflicto no escribe nada;
+- la primera escritura guarda además el archivo tal como estaba antes de que el mod lo tocara en `programs.json.more-agents.orig.bak` (no se reemplaza nunca).
 
 ## Instalar
 
 En Linux y macOS, Herdr App guarda su configuración en `~/.config/herdr-app`:
 
 ```sh
-git clone https://github.com/Izzy2024/More-Agent-Mod.git && mkdir -p ~/.config/herdr-app/mods && cp -r More-Agent-Mod/mods/more-agents ~/.config/herdr-app/mods/
+git clone https://github.com/Izzy2024/More-Agent-Mod.git
+cd More-Agent-Mod
+node scripts/install.mjs            # copia el mod a ~/.config/herdr-app/mods/more-agents
 ```
+
+El instalador prepara la copia y la intercambia con un rename, así que una actualización nunca deja una carpeta a medias ni anidada (`mods/more-agents/more-agents`), y guarda la anterior como `more-agents.bak`. `--dry-run` enseña lo que haría y `--uninstall` quita el mod (ninguno toca `programs.json` ni `keys.json`). Actualizar es `git pull && node scripts/install.mjs`.
 
 Ábrelo con `herdr-app do mod.open --name more-agents`, o, si quieres, asigna una tecla fusionando la entrada de `keys.json` (Alt+Shift+A) en `~/.config/herdr-app/keys.json`.
 
 Hecho para funcionar en Linux, macOS y Windows (el mod le pide a Herdr su carpeta de configuración y usa `sh` en Linux/macOS y `where` en Windows para detectar los agentes instalados), pero de momento solo se ha probado en Linux.
 
-Es un mod de Herdr App (copia la carpeta, como arriba) y no un plugin de `herdr plugin install`, que es otro sistema de extensiones para la CLI de Herdr.
+Es un mod de Herdr App (se instala con el script de arriba) y no un plugin de `herdr plugin install`, que es otro sistema de extensiones para la CLI de Herdr.
 
 ```
 RECIPE.md                    ficha para herdr.dev/mods
@@ -34,8 +39,11 @@ mods/more-agents/
   mod.json                   place none + overlay dialog
 scripts/
   validate-catalog.mjs       valida el esquema del catálogo
+  install.mjs                copia/actualiza/desinstala el mod en la carpeta de la app
   smoke-test.mjs             prueba la lógica de main.js con stubs (sin UI)
   smoke/                     stubs y *.test.mjs (un sandbox por archivo)
+package.json                 npm run validate | test | check | install
+.github/workflows/ci.yml     valida + smoke en Linux y macOS, node 22
 ```
 
 ## ¿Por qué no sale en el menú + algo que añadí?
@@ -44,11 +52,11 @@ El menú + de Herdr (mod `new-menu`) enseña todos los agentes **instalados**, e
 
 Por eso el diálogo avisa: "Added X; it will show in the + menu once you install `cmd`", junto con la pista de instalación. En cuanto el comando existe, el agente aparece; la caché de Herdr tarda hasta 60 s.
 
-Teclado: el foco empieza en el campo de clave del formulario propio. Tab y Shift+Tab van clave → nombre → comando → continue → Add → Add custom → Close, y no dan la vuelta. En el catálogo, ↑/↓ mueven entre agentes y Espacio/Enter los marcan; Espacio/Enter también conmutan continue y los botones. Los comandos se parten como un programa, no como un shell: comillas simples y dobles agrupan y solo `\"` y `\\` escapan, así que las rutas entre comillas sobreviven; una comilla sin cerrar es un error. El formulario propio no escribe `match` (Herdr lo deriva de `run[0]`), y se rechazan las claves `shell`, `program`, `agent` y cualquiera que acabe en `-continue`.
+Teclado: el foco empieza en el campo de clave del formulario propio. Tab y Shift+Tab van clave → nombre → comando → continue → Add → Add custom → los botones Remove de los agentes añadidos → Close, y no dan la vuelta. En el catálogo, ↑/↓ mueven entre agentes y Espacio/Enter los marcan; Espacio/Enter también conmutan continue y los botones. Los comandos se parten como un programa, no como un shell: comillas simples y dobles agrupan y solo `\"` y `\\` escapan, así que las rutas entre comillas sobreviven; una comilla sin cerrar es un error. El formulario propio no escribe `match` (Herdr lo deriva de `run[0]`), y se rechazan las claves `shell`, `program`, `agent` y cualquiera que acabe en `-continue`.
 
 ## Probar en local
 
-1. Copia `mods/more-agents/` a `~/.config/herdr-app/mods/more-agents/`.
+1. `node scripts/install.mjs` (o copia `mods/more-agents/` a `~/.config/herdr-app/mods/more-agents/` a mano).
 2. Valida con `herdr-app check ~/.config/herdr-app/mods/more-agents`.
 3. Ábrelo desde la paleta de comandos: `mod.open` → `more-agents`. También puedes fusionar `keys.json` en el tuyo.
 4. Revisa errores con `herdr-app status` y haz la captura para `preview.png` con `herdr-app shot`.

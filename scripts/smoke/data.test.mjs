@@ -109,8 +109,8 @@ console.log("ok 3: invalid run is replaced");
 }
 console.log("ok 4: failing backup does not block the write");
 
-// 5. A real race after load: nothing is written, the message is honest, the
-//    selection survives, and no ownership is recorded for a missing entry.
+// 5. A real race after load: the single retry re-applies the add on the new
+//    file, so the concurrent entry and the requested one both survive.
 {
   const { m, cx, drain } = await boot({ programs: {} });
   m.selected.add("omp");
@@ -118,14 +118,14 @@ console.log("ok 4: failing backup does not block the write");
   const other = JSON.stringify({ programs: { other: { run: ["other"] } } }, null, 2);
   fs.writeFileSync(P, other); // after edit() has read its snapshot
   await drain();
-  assert.equal(fs.readFileSync(P, "utf8"), other, "stale write refused");
-  assert.match(m.msg, /changed since it was read/i);
-  assert.match(m.msg, /nothing was written/i);
+  const t = JSON.parse(fs.readFileSync(P, "utf8"));
+  assert.deepEqual(t.programs.other.run, ["other"], "concurrent entry kept");
+  assert.deepEqual(t.programs.omp.run, ["omp"], "add re-applied on the new state");
   assert.equal(m.busy, false);
-  assert.equal(m.selected.has("omp"), true, "selection kept on failure");
-  assert.ok(!m.ours().includes("omp"), "no ownership for an entry that is not there");
+  assert.equal(m.selected.size, 0, "successful retry clears the selection");
+  assert.ok(m.ours().includes("omp"), "ownership matches the written entry");
 }
-console.log("ok 5: stale write is refused");
+console.log("ok 5: stale add is retried once");
 
 // 6. An unexpected throw in the save path still clears busy and keeps the selection.
 {
@@ -255,7 +255,8 @@ console.log("ok 9: keys are removed one at a time");
 }
 console.log("ok 10: ownership migration and reconciliation");
 
-// 11. A stale remove leaves ownership reconciled with the file on disk.
+// 11. A stale remove reloads on the retry; the entry is already gone, so it
+//     reports nothing to remove and drops the ownership.
 {
   const { m, cx, drain } = await boot({ programs: {} });
   m.selected.add("omp");
@@ -266,8 +267,8 @@ console.log("ok 10: ownership migration and reconciliation");
   const other = JSON.stringify({ programs: { other: { run: ["other"] } } }, null, 2);
   fs.writeFileSync(P, other);
   await drain();
-  assert.equal(fs.readFileSync(P, "utf8"), other, "stale delete refused");
-  assert.match(m.msg, /changed since it was read/i);
+  assert.equal(fs.readFileSync(P, "utf8"), other, "the concurrent file is kept");
+  assert.match(m.msg, /Nothing to remove/);
   assert.equal(m.busy, false);
   const own = shared(OWN);
   assert.ok(own && typeof own === "object" && !Array.isArray(own));
