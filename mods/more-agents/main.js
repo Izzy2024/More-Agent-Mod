@@ -126,15 +126,22 @@ export default class MoreAgents extends View {
     this.invalidField = null;
     // cx.focus_handle() belongs in init, never in render.
     const handle = () => (typeof cx.focus_handle === "function" ? cx.focus_handle() : null);
+    this.handleFactory = handle;
     this.handles = {
       continue: handle(), "add-selected": handle(), "add-custom": handle(), close: handle(),
       "confirm-yes": handle(), "confirm-keep": handle(),
     };
+    this.actionHandles = {};    // rm-<id>, rm-continue-<id>, add-continue-<id>
     this.confirm = null;        // pending question: { kind: "overwrite" | "remove", ... }
     this.rootHandle = handle();
     this.rowHandles = {};
     if (typeof cx.focus_handle === "function") {
-      for (const a of CATALOG) if (a.status === "verified") this.rowHandles[a.id] = cx.focus_handle();
+      for (const a of CATALOG) {
+        if (a.status === "verified") this.rowHandles[a.id] = cx.focus_handle();
+        this.actionHandles[`rm-${a.id}`] = cx.focus_handle();
+        this.actionHandles[`rm-continue-${a.id}`] = cx.focus_handle();
+        this.actionHandles[`add-continue-${a.id}`] = cx.focus_handle();
+      }
     }
     for (const k of ["key", "name", "run"]) {
       this.inputs[k].on("focus", () => { this.focusedField = k; });
@@ -168,6 +175,7 @@ export default class MoreAgents extends View {
       this.table = { programs: {} };
       this.error = null;
       this.reconcileOwn(this.table.programs);
+      this.ensureActionHandles(this.actionIds());
       return;
     }
     let parsed;
@@ -200,6 +208,7 @@ export default class MoreAgents extends View {
     this.table = parsed;
     this.error = null;
     this.reconcileOwn(programs);
+    this.ensureActionHandles(this.actionIds());
   }
 
   // Which catalog binaries are installed? A single `sh -c` (or `where` on Windows),
@@ -412,6 +421,7 @@ export default class MoreAgents extends View {
         });
         if (r) {
           ok = true;
+          this.ensureActionHandles(this.actionIds());
           if (r.changed.length) {
             await this.detect(); // the message depends on whether the command is installed
             const added = this.addedMessage(r.changed);
@@ -467,6 +477,7 @@ export default class MoreAgents extends View {
         if (needs) {
           this.confirm = needs;
           this.msg = `Changed since it was added (or unknown ownership): ${needs.changed.join(", ")}. Nothing was removed.`;
+          this.moveFocus("confirm-keep", cx);
         } else if (r) {
           this.msg = [
             r.changed.length ? `Removed from your programs.json: ${r.changed.join(", ")}.` : "Nothing to remove.",
@@ -494,7 +505,9 @@ export default class MoreAgents extends View {
   // Adds only the documented continue variant; the base stays as it is.
   addContinue(a, cx) {
     if (!this.canAddContinue(a)) return false;
-    return this.addEntries([continueEntry(a)], cx);
+    return this.addEntries([continueEntry(a)], cx, (ok) => {
+      if (ok) this.moveFocus("add-selected", cx);
+    });
   }
 
   // Marks the offending field, moves the keyboard there, and says why.
@@ -562,6 +575,7 @@ export default class MoreAgents extends View {
         });
         if (r) {
           await this.detect();
+          this.ensureActionHandles(this.actionIds());
           this.msg = [`Saved ${key} in your programs.json.`, r.warning].filter(Boolean).join(" ");
           notify({ title: "More agents", body: `Saved ${key}.`, level: r.warning ? "info" : "success" });
           for (const i of Object.values(this.inputs)) i.set_value("");
@@ -604,7 +618,8 @@ export default class MoreAgents extends View {
     return CATALOG.filter((a) => a.status === "verified" && !runOf(this.table?.programs?.[a.id])).map((a) => a.id);
   }
 
-  // Actions rendered in rows, in the same order as the tab stops.
+  // Row actions in render order. Remove buttons are Tab stops; Add continue
+  // stays a pointer action so the keyboard order stays short.
   actionIds() {
     const p = this.table?.programs ?? {};
     const own = this.own();
@@ -624,20 +639,37 @@ export default class MoreAgents extends View {
     return [...new Set(ids)];
   }
 
+  ensureActionHandles(ids) {
+    if (!this.handleFactory) return;
+    for (const id of ids) {
+      if (this.actionHandles[id]) continue;
+      const h = this.handleFactory();
+      if (h) this.actionHandles[id] = h;
+    }
+  }
+
   // Moves the keyboard to an input or to a control that tracks a focus handle.
   moveFocus(id, cx) {
     this.focusedField = id;
     if (this.inputs[id]) this.inputs[id].focus();
     else if (this.handles[id]) this.handles[id].focus();
     else if (id.startsWith("row-")) this.rowHandles[id.slice(4)]?.focus();
+    else {
+      this.ensureActionHandles([id]);
+      this.actionHandles[id]?.focus();
+    }
     cx?.notify?.();
   }
 
-  // The overwrite question adds two stops before Close while it is open.
+  // Remove buttons follow Add custom; the overwrite/remove question adds two
+  // stops before Close while it is open. Add continue is not a Tab stop.
   tabOrder() {
+    const actions = this.actionIds().filter((id) => !id.startsWith("add-continue-"));
+    this.ensureActionHandles(actions);
+    const base = [...this.order.slice(0, -1), ...actions, "close"];
     return this.confirm
-      ? [...this.order.slice(0, -1), "confirm-yes", "confirm-keep", "close"]
-      : this.order;
+      ? [...base.slice(0, -1), "confirm-yes", "confirm-keep", "close"]
+      : base;
   }
 
   // Tab / Shift+Tab through key → name → run → continue → Add → Add custom →
@@ -702,16 +734,17 @@ export default class MoreAgents extends View {
 
   button(id, label, onClick, t, primary = false) {
     const focused = this.focusedField === id;
+    const handle = this.handles[id] ?? this.actionHandles?.[id];
     return div().id(id).h(26).px(10).flex().flex_none().items_center().rounded(6).text_size(12).cursor_pointer()
       .bg(primary ? t.solid : t.raised).text_color(primary ? t.solid_foreground : t.foreground)
       .border_1().border_color(focused ? t.accent : primary ? t.solid : t.raised)
       .role("button").accessibility_label(label)
-      .when(this.handles[id], (el) => el.track_focus(this.handles[id]))
+      .when(handle, (el) => el.track_focus(handle))
       .hover((s) => s.opacity(0.88))
       // stop_propagation: the click must not also reach the row (clicks bubble up to parents).
       .on_click((_e, cx) => {
         cx.stop_propagation();
-        if (this.inputs[id] || this.handles[id] || id.startsWith("row-")) this.moveFocus(id, cx);
+        if (this.inputs[id] || handle || id.startsWith("row-")) this.moveFocus(id, cx);
         if (!this.busy) onClick(cx);
       })
       .child(label);

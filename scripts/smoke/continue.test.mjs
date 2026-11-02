@@ -252,3 +252,52 @@ console.log("ok D2.5: add continue only when documented and missing");
 console.log("ok D2.6: base and continue remove independently");
 
 console.log("continue.test: D1+D2 OK");
+
+// D3 ------------------------------------------------------------------------
+// 7. Remove is a real Tab stop after Add custom, activates with Enter/Space,
+//    and focus lands on a live control after the button disappears.
+{
+  const { m, cx, drain } = await boot({ programs: {} });
+  m.selected.add("omp");
+  m.addSelected(cx);
+  await drain();
+  assert.ok(m.actionHandles["rm-omp"], "catalog remove has a focus handle");
+  m.moveFocus("add-custom", cx);
+  let stopped = 0;
+  const kcx = { stop_propagation: () => { stopped++; }, notify: () => {} };
+  m.formKey({ key: "tab", modifiers: {} }, kcx);
+  assert.equal(m.focusedField, "rm-omp", "Remove follows Add custom");
+  assert.equal(stopped, 1, "Tab is consumed");
+  assert.ok(m.tabOrder().includes("rm-omp"));
+  // While a confirm is open, both answers follow the row actions.
+  m.confirm = { kind: "remove", keys: ["omp"], changed: ["omp"] };
+  const order = m.tabOrder();
+  assert.ok(order.indexOf("confirm-yes") > order.indexOf("rm-omp"));
+  assert.ok(order.indexOf("confirm-keep") > order.indexOf("confirm-yes"));
+  m.confirm = null;
+  assert.equal(m.activate(m.focusedField, cx), true);
+  await drain();
+  assert.ok(!read().programs.omp, "activated Remove deleted the base");
+  assert.equal(m.focusedField, "add-selected", "focus moved to a live control");
+  assert.equal(m.busy, false);
+}
+// The same for a key created by the custom form.
+{
+  const { m, cx, drain } = await boot({ programs: {} });
+  m.inputs.key._set("my-agent");
+  m.inputs.name._set("My Agent");
+  m.inputs.run._set("my-bin");
+  m.addCustom(cx);
+  await drain();
+  assert.ok(m.actionHandles["rm-my-agent"], "custom remove has a focus handle");
+  m.moveFocus("add-custom", cx);
+  m.formKey({ key: "tab", modifiers: {} }, { stop_propagation: () => {}, notify: () => {} });
+  assert.equal(m.focusedField, "rm-my-agent");
+  assert.equal(m.activate("rm-my-agent", cx), true);
+  await drain();
+  assert.ok(!("my-agent" in read().programs));
+  assert.equal(m.focusedField, "add-selected");
+}
+console.log("ok D3.7: Remove is keyboard reachable");
+
+console.log("continue.test: D1+D2+D3 OK");
