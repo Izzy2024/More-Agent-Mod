@@ -94,6 +94,13 @@ assert.equal(m.focusedField, "add-selected", "focus returns to a live control");
 tab();
 assert.equal(m.focusedField, "add-custom", "Tab works after the confirm");
 
+// A blur can leave no focus at all; keys must not crash or eat Tab.
+m.focusedField = null;
+assert.doesNotThrow(() => m.formKey({ key: "tab", modifiers: {} }, kcx));
+assert.doesNotThrow(() => m.keyDown({ key: "down", modifiers: {} }, kcx));
+assert.doesNotThrow(() => m.keyDown({ key: "enter", modifiers: {} }, kcx));
+assert.equal(m.activate(null, kcx), false);
+
 // Rendering the dialog with focus rings and labels must not throw.
 m.render();
 
@@ -164,6 +171,7 @@ m.addCustom(cx);
 await settle();
 m.resolveConfirm(true, cx);
 await settle();
+assert.equal(m.focusedField, "key", "the confirm buttons are gone; focus is on a live control");
 assert.deepEqual(read().programs.aider.run, ["aider", "--x"]);
 assert.deepEqual(read().shells, ["zsh"], "top-level keys preserved");
 

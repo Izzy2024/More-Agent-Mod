@@ -54,8 +54,9 @@ for (const programs of [[], "x"]) {
   m.addSelected(cx);
   await drain();
   assert.equal(fs.readFileSync(P, "utf8"), raw, "file untouched");
-  assert.match(m.msg, /programs/i);
-  assert.match(m.msg, /object/i);
+  assert.match(m.error, /programs/i, "the banner carries the error");
+  assert.match(m.error, /object/i);
+  assert.equal(m.msg, "", "the banner is not repeated in the status line");
   assert.equal(m.busy, false, "busy reset after the failed add");
   assert.doesNotThrow(() => m.render());
 }
@@ -71,7 +72,7 @@ for (const bad of ["x", [], null]) {
   m.addSelected(cx);
   await drain();
   assert.equal(fs.readFileSync(P, "utf8"), file, "file untouched");
-  assert.match(m.msg, /object/i);
+  assert.match(m.error, /object/i);
   assert.equal(m.busy, false);
 }
 console.log("ok 2: invalid entry shape");
@@ -103,7 +104,7 @@ console.log("ok 3: invalid run is replaced");
   assert.deepEqual(t.programs.omp.run, ["omp"], "main file written");
   assert.equal(fs.existsSync(BAK), false, "no backup was written");
   assert.match(m.msg, /backup/i);
-  assert.doesNotMatch(m.msg, /did the file change/i);
+  assert.doesNotMatch(m.msg, /changed since it was read/i);
   assert.equal(m.busy, false);
   assert.equal(m.selected.size, 0, "selection cleared after a successful write");
 }

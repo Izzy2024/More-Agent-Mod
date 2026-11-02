@@ -57,6 +57,17 @@ const rowOf = (m, name) => {
   assert.match(owned, /could not check/);
   assert.doesNotMatch(owned, /in the \+ menu/);
 }
+// A later probe that fails is not allowed to keep the previous verdict.
+{
+  const { m } = await boot({ programs: {} });
+  assert.match(rowOf(m, "Oh My Pi (omp)"), /:: installed$/);
+  process.env.MA_EXEC_FAIL = "1";
+  process.env.MA_KNOWN_AGENTS = "";
+  await m.detect();
+  delete process.env.MA_EXEC_FAIL;
+  assert.match(rowOf(m, "Oh My Pi (omp)"), /could not check/);
+  assert.doesNotMatch(rowOf(m, "Oh My Pi (omp)"), /installed/);
+}
 console.log("ok 4: PATH badge is installed / not found / could not check");
 
 // 5. A failed save is an error, the buttons show Saving…, and the selection stays.

@@ -270,7 +270,7 @@ export default class MoreAgents extends View {
         const found = new Set(r.stdout.split("\n").map((s) => s.trim()).filter(Boolean));
         for (const b of bins) this.onPath[b] = found.has(b);
       }
-    } catch { /* no detection: shown as unknown */ }
+    } catch { this.onPath = {}; /* shown as unknown, not as the previous answer */ }
     // The interactive shell may have a different PATH (mise, nvm…): what Herdr already knows wins.
     try { for (const a of await knownAgents()) if (a.installed) this.onPath[a.run[0]] = true; } catch {}
   }
@@ -427,7 +427,7 @@ export default class MoreAgents extends View {
   // conflict is retried from the new snapshot; a second one is reported.
   async edit(change) {
     await this.load();
-    if (this.error) { this.msg = this.error; return null; }
+    if (this.error) { this.msg = ""; return null; }
     let p = await this.prepareEdit(change);
     if (!p) return null;
     if (p.text == null) return p.result;
@@ -684,6 +684,7 @@ export default class MoreAgents extends View {
       return;
     }
     this.invalidField = null;
+    this.moveFocus("key", cx); // the confirm buttons are gone
     this.writeEntry(c.key, c.entry, cx);
   }
 
@@ -754,10 +755,11 @@ export default class MoreAgents extends View {
   formKey(e, cx) {
     if (e.key !== "tab") return;
     const order = this.tabOrder();
-    let i = order.indexOf(this.focusedField);
+    const cur = this.focusedField ?? "";
+    let i = order.indexOf(cur);
     // Rows sit between the command and the continue checkbox, but are not Tab
     // stops themselves.
-    if (i < 0 && this.focusedField.startsWith("row-")) i = order.indexOf("run");
+    if (i < 0 && cur.startsWith("row-")) i = order.indexOf("run");
     if (i < 0) return;
     const j = i + (e.modifiers?.shift ? -1 : 1);
     if (j < 0 || j >= order.length) return;
@@ -773,9 +775,10 @@ export default class MoreAgents extends View {
       const ids = this.offeredIds();
       if (!ids.length) return;
       const down = e.key === "down";
-      if (this.focusedField === "add-selected") this.moveFocus(`row-${down ? ids[0] : ids[ids.length - 1]}`, cx);
-      else if (this.focusedField.startsWith("row-")) {
-        const cur = ids.indexOf(this.focusedField.slice(4));
+      const here = this.focusedField ?? "";
+      if (here === "add-selected") this.moveFocus(`row-${down ? ids[0] : ids[ids.length - 1]}`, cx);
+      else if (here.startsWith("row-")) {
+        const cur = ids.indexOf(here.slice(4));
         const next = cur < 0 ? 0 : Math.min(Math.max(cur + (down ? 1 : -1), 0), ids.length - 1);
         this.moveFocus(`row-${ids[next]}`, cx);
       } else return;
@@ -783,11 +786,12 @@ export default class MoreAgents extends View {
       return;
     }
     if (e.key !== " " && e.key !== "space" && e.key !== "enter") return;
-    if (this.inputs[this.focusedField]) return; // typing, not activating
+    if (this.inputs[this.focusedField ?? ""]) return; // typing, not activating
     if (this.activate(this.focusedField, cx)) cx.stop_propagation();
   }
 
   activate(id, cx) {
+    if (!id) return false;
     if (id === "continue") { this.withContinue = !this.withContinue; cx?.notify?.(); return true; }
     if (id === "add-selected") { this.addSelected(cx); return true; }
     if (id === "add-custom") { this.addCustom(cx); return true; }
