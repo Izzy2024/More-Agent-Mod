@@ -5,6 +5,7 @@
 // status: "verified" (command from the official docs, see source),
 //         "unverified" (not offered for adding) or
 //         "builtin" (Herdr already ships it in its + menu; informational only).
+// checked: "YYYY-MM-DD" of the last review of `source`; required for verified.
 export default [
   {
     "id": "omp",
@@ -24,6 +25,7 @@ export default [
     "icon": "icons/pi.svg",
     "status": "verified",
     "source": "https://omp.sh/docs/quickstart",
+    "checked": "2026-11-02",
     "note": "Fork of Pi; reuses the Pi icon."
   },
   {
@@ -33,7 +35,6 @@ export default [
       "command-code"
     ],
     "match": [
-      "cmd",
       "cmdc",
       "command-code"
     ],
@@ -46,7 +47,8 @@ export default [
     "icon": "icons/command-code.svg",
     "status": "verified",
     "source": "https://commandcode.ai/docs/reference/cli",
-    "note": "Herdr already ships a name and icon, but no run."
+    "checked": "2026-11-02",
+    "note": "Herdr already ships a name and icon, but no run. On Windows the short alias is `cmdc`: `cmd` is the system shell."
   },
   {
     "id": "kilo",
@@ -65,7 +67,8 @@ export default [
     "docs": "https://kilo.ai/docs/cli",
     "icon": "icons/agent.svg",
     "status": "verified",
-    "source": "https://github.com/Kilo-Org/kilocode#readme",
+    "source": "https://kilo.ai/docs/code-with-ai/platforms/cli",
+    "checked": "2026-11-02",
     "note": "Fork of OpenCode."
   },
   {
@@ -85,7 +88,8 @@ export default [
     "docs": "https://github.com/QwenLM/qwen-code",
     "icon": "icons/agent.svg",
     "status": "verified",
-    "source": "https://github.com/QwenLM/qwen-code/blob/main/docs/users/common-workflow.md"
+    "source": "https://github.com/QwenLM/qwen-code/blob/main/docs/users/common-workflow.md",
+    "checked": "2026-11-02"
   },
   {
     "id": "goose",
@@ -102,7 +106,8 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://goose-docs.ai/docs/guides/goose-cli-commands",
-    "note": "Continue unverified: --resume without a name is not documented as 'the latest'."
+    "checked": "2026-11-02",
+    "note": "Continue unverified: --resume resumes a session, but the docs do not say it defaults to the latest one."
   },
   {
     "id": "aider",
@@ -122,6 +127,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://aider.chat/docs/config/options.html",
+    "checked": "2026-11-02",
     "note": "Runs under Python; Herdr recognizes it by the script name."
   },
   {
@@ -137,8 +143,9 @@ export default [
     "docs": "https://docs.cline.bot/cline-cli/overview",
     "icon": "icons/agent.svg",
     "status": "verified",
-    "source": "https://github.com/cline/cline#readme",
-    "note": "Continue flag unverified."
+    "source": "https://docs.cline.bot/cli/cli-reference",
+    "checked": "2026-11-02",
+    "note": "Continue needs a session id (`--id`); there is no documented flag for the latest session."
   },
   {
     "id": "droid",
@@ -158,6 +165,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://docs.factory.ai/reference/cli-reference",
+    "checked": "2026-11-02",
     "note": "--resume without an id opens the most recently modified session."
   },
   {
@@ -177,7 +185,8 @@ export default [
     "docs": "https://docs.augmentcode.com/cli/reference",
     "icon": "icons/agent.svg",
     "status": "verified",
-    "source": "https://docs.augmentcode.com/cli/reference"
+    "source": "https://docs.augmentcode.com/cli/reference",
+    "checked": "2026-11-02"
   },
   {
     "id": "junie",
@@ -188,12 +197,17 @@ export default [
     "match": [
       "junie"
     ],
+    "continue": [
+      "junie",
+      "--resume"
+    ],
     "install": "curl -fsSL https://junie.jetbrains.com/install.sh | bash",
     "docs": "https://junie.jetbrains.com/docs/junie-cli.html",
     "icon": "icons/agent.svg",
     "status": "verified",
-    "source": "https://github.com/JetBrains/junie#readme",
-    "note": "Continue flag unverified."
+    "source": "https://junie.jetbrains.com/docs/parameters.html",
+    "checked": "2026-11-02",
+    "note": "--resume resumes the last session; --session-id picks a specific one."
   },
   {
     "id": "mistral-vibe",
@@ -212,7 +226,8 @@ export default [
     "docs": "https://github.com/mistralai/mistral-vibe",
     "icon": "icons/agent.svg",
     "status": "verified",
-    "source": "https://github.com/mistralai/mistral-vibe#readme"
+    "source": "https://github.com/mistralai/mistral-vibe#readme",
+    "checked": "2026-11-02"
   },
   {
     "id": "continue-cli",
@@ -223,12 +238,17 @@ export default [
     "match": [
       "cn"
     ],
+    "continue": [
+      "cn",
+      "--resume"
+    ],
     "install": "npm i -g @continuedev/cli",
     "docs": "https://github.com/continuedev/continue/tree/main/extensions/cli",
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://github.com/continuedev/continue/blob/main/extensions/cli/README.md",
-    "note": "Continue flag unverified."
+    "checked": "2026-11-02",
+    "note": "Resumes the last session for this terminal."
   },
   {
     "id": "trae-agent",
@@ -244,6 +264,7 @@ export default [
     "icon": "icons/agent.svg",
     "status": "verified",
     "source": "https://github.com/bytedance/trae-agent#readme",
+    "checked": "2026-11-02",
     "note": "Installed with git clone + uv sync in a venv: trae-cli has to be on your PATH."
   },
   {
