@@ -1,5 +1,5 @@
-// Dialog feedback: honest PATH badges, message levels, and the saving state.
-// programs.json recovery (read / JSON / Reload) is appended in the C2 commit.
+// Dialog feedback: honest PATH badges, message levels, the saving state,
+// and recovery of a broken programs.json (Reload).
 import fs from "node:fs";
 import assert from "node:assert";
 import { HOME, notes, setShared } from "./stubs.mjs";
@@ -9,7 +9,7 @@ fs.mkdirSync(HOME, { recursive: true });
 const P = HOME + "/programs.json";
 const OWN = "more-agents.keys";
 
-async function boot({ file, programs, own, onPath } = {}) {
+async function boot({ file, programs, own, onPath, mode } = {}) {
   delete process.env.MA_FAIL_WRITE;
   delete process.env.MA_EXEC_FAIL;
   process.env.MA_ONPATH = onPath ?? "omp aider";
@@ -20,6 +20,7 @@ async function boot({ file, programs, own, onPath } = {}) {
   fs.rmSync(P + ".more-agents.bak", { force: true });
   if (file !== undefined) fs.writeFileSync(P, file);
   else if (programs !== undefined) fs.writeFileSync(P, JSON.stringify({ programs }, null, 2));
+  if (mode != null) fs.chmodSync(P, mode);
   const spawned = [];
   const cx = { spawn: (f) => { spawned.push(f(cx)); }, notify() {} };
   const m = new M();
@@ -103,3 +104,65 @@ console.log("ok 5: failed save keeps the selection and says error");
 console.log("ok 6: toast summarizes, dialog keeps the install hints");
 
 console.log("ui.test: C1 OK");
+
+// 1. A read error (permissions) leaves no table, explains itself, and offers Reload.
+{
+  const secret = "SECRET-not-json";
+  const { m } = await boot({ file: secret, mode: 0 });
+  try {
+    assert.equal(m.table, null);
+    assert.match(m.error, /Could not read/);
+    assert.match(m.error, /EACCES|permission denied/i);
+    assert.doesNotMatch(m.error, /reopen/i);
+    assert.doesNotThrow(() => m.render());
+    assert.ok(m.shown.includes("Cannot read programs.json"), "read banner");
+    assert.ok(m.shown.includes("button:reload"), "Reload is painted");
+  } finally {
+    fs.chmodSync(P, 0o644);
+  }
+  assert.equal(fs.readFileSync(P, "utf8"), secret, "a read failure writes nothing");
+}
+console.log("ok 1: read error banner and Reload");
+
+// 2. Invalid JSON keeps the cause (line/column when the parser reports it) and the bytes.
+{
+  const raw = "{";
+  const { m } = await boot({ file: raw });
+  assert.equal(m.table, null);
+  assert.match(m.error, /not valid JSON/);
+  assert.match(m.error, /line 1 column 2/i);
+  assert.doesNotMatch(m.error, /reopen/i);
+  assert.equal(fs.readFileSync(P, "utf8"), raw, "raw is not rewritten");
+  m.render();
+  assert.ok(m.shown.includes("Invalid JSON"));
+  assert.ok(m.shown.includes("button:reload"));
+  const shape = await boot({ file: "[]\n" });
+  assert.equal(shape.m.table, null);
+  assert.match(shape.m.error, /must be a JSON object/);
+  assert.doesNotMatch(shape.m.error, /not valid JSON/);
+  assert.equal(fs.readFileSync(P, "utf8"), "[]\n");
+  shape.m.render();
+  assert.ok(shape.m.shown.includes("Unexpected shape"));
+}
+console.log("ok 2: invalid JSON and a bad shape stay unwritten");
+
+// 3. After the file is fixed outside the dialog, Reload restores the table.
+{
+  const { m, cx, drain } = await boot({ file: "{" });
+  assert.equal(m.table, null);
+  const fixed = JSON.stringify({ programs: { kilo: { name: "Kilo", run: ["kilo"] } } }, null, 2);
+  fs.writeFileSync(P, fixed);
+  m.reload(cx);
+  await drain();
+  assert.equal(m.error, null);
+  assert.equal(m.table.programs.kilo.run[0], "kilo");
+  m.render();
+  assert.ok(!m.shown.includes("button:reload"), "the banner is gone");
+  assert.ok(m.offeredIds().includes("omp"), "rows accept a selection again");
+  m.selected.add("omp");
+  assert.deepEqual(m.selectable(), ["omp"]);
+  assert.match(rowOf(m, "Kilo Code CLI"), /already in your programs\.json/);
+}
+console.log("ok 3: Reload recovers a repaired programs.json");
+
+console.log("ui.test: C1+C2 OK");

@@ -157,7 +157,7 @@ export default class MoreAgents extends View {
     const handle = () => (typeof cx.focus_handle === "function" ? cx.focus_handle() : null);
     this.handles = {
       continue: handle(), "add-selected": handle(), "add-custom": handle(), close: handle(),
-      "confirm-yes": handle(), "confirm-keep": handle(),
+      "confirm-yes": handle(), "confirm-keep": handle(), reload: handle(),
     };
     this.confirm = null;        // pending question: { kind: "overwrite" | "remove", ... }
     this.rootHandle = handle();
@@ -248,6 +248,31 @@ export default class MoreAgents extends View {
     } catch { /* no detection: shown as unknown */ }
     // The interactive shell may have a different PATH (mise, nvm…): what Herdr already knows wins.
     try { for (const a of await knownAgents()) if (a.installed) this.onPath[a.run[0]] = true; } catch {}
+  }
+
+  // The banner names the failure. The sentence under it is load()'s own text,
+  // which already includes the parser's line and column when it has them.
+  errorHeading() {
+    const e = this.error || "";
+    if (e.startsWith("Could not read ")) return "Cannot read programs.json";
+    if (e.includes("not valid JSON")) return "Invalid JSON";
+    if (/must be|non-object entry/.test(e)) return "Unexpected shape";
+    return "programs.json";
+  }
+
+  // Re-read and re-detect. Closing and reopening the dialog does not do this.
+  reload(cx) {
+    if (this.busy) return false;
+    const task = async (cx) => {
+      await this.load();
+      await this.detect();
+      cx?.notify?.();
+    };
+    if (typeof cx?.spawn === "function") {
+      cx.spawn(task);
+      return true;
+    }
+    return task(cx);
   }
 
   // Ownership: key -> fingerprint. The old format (an array of keys) means the
@@ -599,10 +624,17 @@ export default class MoreAgents extends View {
   }
 
   // The overwrite question adds two stops before Close while it is open.
+  // Reload is a stop only while the file is broken, so a healthy dialog keeps
+  // the same Tab order the keyboard tests walk.
   tabOrder() {
-    return this.confirm
+    const order = this.confirm
       ? [...this.order.slice(0, -1), "confirm-yes", "confirm-keep", "close"]
-      : this.order;
+      : [...this.order];
+    if (this.error) {
+      const at = order.indexOf("close");
+      order.splice(at < 0 ? order.length : at, 0, "reload");
+    }
+    return order;
   }
 
   // Tab / Shift+Tab through key → name → run → continue → Add → Add custom →
@@ -648,6 +680,7 @@ export default class MoreAgents extends View {
     if (id === "add-selected") { this.addSelected(cx); return true; }
     if (id === "add-custom") { this.addCustom(cx); return true; }
     if (id === "close") { closeOverlay(props().overlay); return true; }
+    if (id === "reload") { this.reload(cx); return true; }
     if (id === "confirm-yes") { this.resolveConfirm(true, cx); return true; }
     if (id === "confirm-keep") { this.resolveConfirm(false, cx); return true; }
     if (!id.startsWith("row-")) return false;
@@ -761,7 +794,11 @@ export default class MoreAgents extends View {
         .child(div().text_size(14).font_semibold().text_color(t.foreground).child("More agents for the + menu"))
         .child(this.button("close", "Close", () => closeOverlay(props().overlay), t)))
       .child(div().text_size(11.5).text_color(t.muted).child(`Writes to ${this.path}; after a successful save the previous version goes to programs.json.more-agents.bak (best-effort: a backup failure is reported, not blocking the write). Herdr reloads it by itself.`))
-      .when(Boolean(this.error), (el) => el.child(div().flex_none().max_h(72).overflow_y_scrollbar().p(8).rounded(6).bg(t.raised).text_color(t.blocked).text_size(12).whitespace_normal().child(this.note(this.error))))
+      .when(Boolean(this.error), (el) => el.child(h_flex().flex_none().max_h(72).overflow_y_scrollbar().gap(8).items_center().p(8).rounded(6).bg(t.raised)
+        .child(v_flex().flex_1().min_w(0).gap(2)
+          .child(div().text_size(12).font_semibold().text_color(t.blocked).child(this.note(this.errorHeading())))
+          .child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(this.note(this.error))))
+        .child(this.button("reload", "Reload", (cx) => this.reload(cx), t))))
       .child(v_flex().id("catalog").role("list_box").accessibility_label("Agents").flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
         .children(list.map((a) => this.row(a, t)))
         .children(custom.map((k) => {
