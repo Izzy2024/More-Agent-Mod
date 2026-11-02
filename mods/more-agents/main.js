@@ -65,7 +65,7 @@ function inferLevel(text) {
   if (!text) return "info";
   if (/could not |nothing was written|not valid json|must be a json|must be an object|non-object entry|invalid key|unclosed |the command is missing|reserved program key|reserved for catalog/i.test(text))
     return "error";
-  if (/backup was not written|already in your programs\.json|nothing was removed|changed since it was added|unknown ownership|check at least one|overwrite it or keep|is on your PATH|need install/i.test(text))
+  if (/backup was not written|already in your programs\.json|nothing was removed|changed since it was added|unknown ownership|check at least one|overwrite it or keep|is on your PATH|is not on your PATH|will not show in the \+ menu|need install/i.test(text))
     return "warning";
   if (/now shows? in the \+ menu|saved .+ in your programs\.json|removed from your programs\.json/i.test(text))
     return "success";
@@ -109,6 +109,44 @@ function entries(a, withContinue) {
   const out = [[a.id, { name: a.name, icon: a.icon, ...TILE, ...(a.match ? { match: a.match } : {}), run: a.run }]];
   if (withContinue && a.continue) out.push(continueEntry(a));
   return out;
+}
+
+export const RESOLVE_MARK = "more-agents-resolve-argv0";
+// Exact `command -v` only: one lookup, no per-file forks on PATH.
+const RESOLVE_SH = [
+  RESOLVE_MARK,
+  `if command -v "$1" >/dev/null 2>&1; then
+  printf 'EXACT\\n'
+else
+  printf 'MISSING\\n'
+fi`,
+].join("\n");
+
+function parseResolveOutput(stdout) {
+  const out = String(stdout ?? "").trim();
+  if (out === "EXACT") return { status: "exact" };
+  return { status: "missing" };
+}
+
+async function resolveArgv0Windows(binary, execFn) {
+  const r = await execFn("where", [binary]).catch(() => ({ code: 1, stdout: "" }));
+  if (r.code !== 0 || !String(r.stdout ?? "").trim()) return { status: "missing" };
+  // `where empryo` finds empryo.exe: compare the name without its extension, and
+  // Windows filenames are case-insensitive, so `Empryo` is the same command.
+  const stem = (name) => name.replace(/^.*[/\\]/, "").replace(/\.[^.]+$/, "").toLowerCase();
+  const bases = new Set(String(r.stdout).trim().split(/\r?\n/).map(stem).filter(Boolean));
+  return bases.has(stem(binary)) ? { status: "exact" } : { status: "missing" };
+}
+
+export async function resolveArgv0OnPath(binary, { exec: execFn, windows }) {
+  if (!binary) return { status: "missing" };
+  try {
+    if (windows) return await resolveArgv0Windows(binary, execFn);
+    const r = await execFn("sh", ["-c", RESOLVE_SH, "sh", binary]);
+    return parseResolveOutput(r.stdout);
+  } catch {
+    return { status: "missing" };
+  }
 }
 
 export default class MoreAgents extends View {
@@ -591,6 +629,12 @@ export default class MoreAgents extends View {
     cx?.notify?.();
   }
 
+  // Resolves argv[0] on PATH with exact `command -v` / `where` (no case guessing).
+  async applyPathResolution(argv) {
+    const resolution = await resolveArgv0OnPath(argv[0], { exec, windows: WINDOWS });
+    return { argv, missing: resolution.status !== "exact" };
+  }
+
   // What the command field will produce: the argv, and whether its binary is
   // known to be missing from the PATH.
   runPreview() {
@@ -605,6 +649,7 @@ export default class MoreAgents extends View {
   }
 
   addCustom(cx) {
+    if (this.busy) return false;
     this.invalidField = null;
     this.confirm = null;
     const key = this.inputs.key.value().trim().toLowerCase();
@@ -619,42 +664,70 @@ export default class MoreAgents extends View {
       return this.fail("run", e.message ?? String(e), cx);
     }
     if (!argv.length || !argv[0]) return this.fail("run", "The command is missing.", cx);
-    // No match: Herdr derives the program from run[0]. A wrapper (npx, uvx,
-    // python…) would be mislabelled by a match of our own.
-    const entry = { name: name || key, icon: "icons/agent.svg", ...TILE, run: argv };
     const inCatalog = CATALOG.some((a) => a.id === key);
     const inFile = Boolean(this.table?.programs && Object.prototype.hasOwnProperty.call(this.table.programs, key));
-    if (inCatalog || inFile) {
-      const where = [inFile ? "your programs.json" : "", inCatalog ? "the catalog" : ""].filter(Boolean).join(" and ");
-      this.confirm = { kind: "overwrite", key, entry, where };
-      this.say("warning", `"${key}" is already in ${where}: overwrite it or keep it as is?`);
-      this.moveFocus("confirm-keep", cx);
-      return;
+    this.busy = true;
+    cx.spawn(async (cx) => {
+      try {
+        const { argv: resolved, missing } = await this.applyPathResolution(argv);
+        // No match: Herdr derives the program from run[0]. A wrapper (npx, uvx,
+        // python…) would be mislabelled by a match of our own.
+        const entry = { name: name || key, icon: "icons/agent.svg", ...TILE, run: resolved };
+        const where = [inFile ? "your programs.json" : "", inCatalog ? "the catalog" : ""].filter(Boolean).join(" and ");
+        if (missing) {
+          this.confirm = {
+            kind: "path-missing",
+            key,
+            entry,
+            pendingOverwrite: (inCatalog || inFile) ? { where } : null,
+          };
+          this.say("warning", `\`${argv[0]}\` is not on your PATH, so it will not show in the + menu until it exists. Add anyway?`);
+          this.moveFocus("confirm-keep", cx);
+          return;
+        }
+        if (inCatalog || inFile) {
+          this.confirm = { kind: "overwrite", key, entry, where };
+          this.say("warning", `"${key}" is already in ${where}: overwrite it or keep it as is?`);
+          this.moveFocus("confirm-keep", cx);
+          return;
+        }
+        await this.saveCustomEntry(key, entry, cx);
+      } catch (e) {
+        this.say("error", `Could not check PATH for \`${argv[0]}\`: ${errText(e)}.`);
+      } finally {
+        this.busy = false;
+        cx.notify();
+      }
+    });
+    return true;
+  }
+
+  async saveCustomEntry(key, entry, cx, note = null) {
+    const r = await this.edit((p) => {
+      const own = this.own();
+      p[key] = entry;
+      own[key] = fingerprint(entry);
+      return { changed: [key], skipped: [], own };
+    });
+    if (r) {
+      await this.detect();
+      const saved = [`Saved ${key} in your programs.json.`, note, r.warning].filter(Boolean).join(" ");
+      const level = (note || r.warning) ? "warning" : "success";
+      this.say(level, saved);
+      this.ensureActionHandles(this.actionIds());
+      notify({ title: "More agents", body: `Saved ${key}.`, level: level === "warning" ? "info" : "success" });
+      for (const i of Object.values(this.inputs)) i.set_value("");
+      this.invalidField = null;
     }
-    this.writeEntry(key, entry, cx);
   }
 
   // Writes exactly this entry: the confirmation covered replacing whatever was there.
-  writeEntry(key, entry, cx) {
+  writeEntry(key, entry, cx, note = null) {
     if (this.busy) return false;
     this.busy = true;
     cx.spawn(async (cx) => {
       try {
-        const r = await this.edit((p) => {
-          const own = this.own();
-          p[key] = entry;
-          own[key] = fingerprint(entry);
-          return { changed: [key], skipped: [], own };
-        });
-        if (r) {
-          await this.detect();
-          const saved = [`Saved ${key} in your programs.json.`, r.warning].filter(Boolean).join(" ");
-          this.say(r.warning ? "warning" : "success", saved);
-          this.ensureActionHandles(this.actionIds());
-          notify({ title: "More agents", body: `Saved ${key}.`, level: r.warning ? "info" : "success" });
-          for (const i of Object.values(this.inputs)) i.set_value("");
-          this.invalidField = null;
-        }
+        await this.saveCustomEntry(key, entry, cx, note);
       } catch (e) {
         this.say("error", `Could not save ${key}: ${errText(e)}.`);
       } finally {
@@ -678,6 +751,24 @@ export default class MoreAgents extends View {
       cx.notify();
       return;
     }
+    if (c.kind === "path-missing") {
+      this.moveFocus("key", cx);
+      if (!overwrite) {
+        this.say("info", "Cancelled.");
+        cx.notify();
+        return;
+      }
+      const note = `\`${c.entry.run[0]}\` is not on your PATH, so it will not show in the + menu until it exists.`;
+      if (c.pendingOverwrite) {
+        this.confirm = { kind: "overwrite", key: c.key, entry: c.entry, where: c.pendingOverwrite.where, pathNote: note };
+        this.say("warning", `"${c.key}" is already in ${c.pendingOverwrite.where}: overwrite it or keep it as is?`);
+        this.moveFocus("confirm-keep", cx);
+        cx.notify();
+        return;
+      }
+      this.writeEntry(c.key, c.entry, cx, note);
+      return;
+    }
     if (!overwrite) {
       this.say("info", `Kept the existing "${c.key}".`);
       this.moveFocus("key", cx);
@@ -685,7 +776,7 @@ export default class MoreAgents extends View {
     }
     this.invalidField = null;
     this.moveFocus("key", cx); // the confirm buttons are gone
-    this.writeEntry(c.key, c.entry, cx);
+    this.writeEntry(c.key, c.entry, cx, c.pathNote ?? null);
   }
 
   // Verified agents that can still be added, in the list's order.
@@ -966,8 +1057,14 @@ export default class MoreAgents extends View {
         .when(this.busy, (e2) => e2.child(div().text_size(11.5).text_color(t.muted).child(this.note("Saving…"))))
         .when(Boolean(this.confirm), (e2) => e2.child(h_flex().gap(8).items_center().p(8).rounded(6).bg(t.raised)
           .child(div().flex_1().min_w(0).text_size(11.5).text_color(this.msgTone(t)).whitespace_normal().child(this.msg))
-          .child(this.button("confirm-yes", this.confirm.kind === "remove" ? "Remove anyway" : "Overwrite", (cx) => this.resolveConfirm(true, cx), t, true))
-          .child(this.button("confirm-keep", this.confirm.kind === "remove" ? "Keep" : "Keep as is", (cx) => this.resolveConfirm(false, cx), t))))
+          .child(this.button("confirm-yes",
+            this.confirm.kind === "remove" ? "Remove anyway"
+              : this.confirm.kind === "path-missing" ? "Add anyway"
+                : "Overwrite", (cx) => this.resolveConfirm(true, cx), t, true))
+          .child(this.button("confirm-keep",
+            this.confirm.kind === "remove" ? "Keep"
+              : this.confirm.kind === "path-missing" ? "Cancel"
+                : "Keep as is", (cx) => this.resolveConfirm(false, cx), t))))
         .when(Boolean(this.msg) && !this.confirm, (e2) => e2.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : this.msgTone(t)).whitespace_normal().child(this.msg)))));
   }
 }
