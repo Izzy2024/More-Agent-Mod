@@ -59,6 +59,18 @@ const isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v)
 // A run counts only as a non-empty array: [] , null or a stray string are not a command.
 const runOf = (entry) => (Array.isArray(entry?.run) && entry.run.length ? entry.run : null);
 const errText = (e) => String(e?.message ?? e);
+// Levels for strings assigned by the write path. `msg` itself stays a string so
+// the other smoke files can keep matching it; `say()` sets the level explicitly.
+function inferLevel(text) {
+  if (!text) return "info";
+  if (/could not |nothing was written|not valid json|must be a json|must be an object|non-object entry|invalid key|unclosed |the command is missing|reserved program key|reserved for catalog/i.test(text))
+    return "error";
+  if (/backup was not written|already in your programs\.json|nothing was removed|changed since it was added|unknown ownership|check at least one|overwrite it or keep|is on your PATH|need install/i.test(text))
+    return "warning";
+  if (/now shows? in the \+ menu|saved .+ in your programs\.json|removed from your programs\.json/i.test(text))
+    return "success";
+  return "info";
+}
 // Key-order-independent JSON, for comparing an entry with its merged result.
 function stableJson(v) {
   if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
@@ -85,6 +97,38 @@ function entries(a, withContinue) {
 }
 
 export default class MoreAgents extends View {
+  // Text stays a string. The level is beside it: error, warning, success, info.
+  get msg() { return this._msg ?? ""; }
+  set msg(value) {
+    if (value && typeof value === "object") {
+      this._msg = String(value.text ?? "");
+      this._level = value.level || inferLevel(this._msg);
+      this._hold = false;
+      return;
+    }
+    this._msg = value == null ? "" : String(value);
+    if (!this._hold) this._level = inferLevel(this._msg);
+    this._hold = false;
+  }
+  get msgLevel() { return this._level || "info"; }
+  say(level, text) {
+    this._hold = true;
+    this._level = level;
+    this.msg = text;
+  }
+  // What render painted, so smoke tests can read the dialog without a real window.
+  note(text) {
+    if (this.shown && text != null && text !== "") this.shown.push(String(text));
+    return text;
+  }
+  // error → blocked, warning/info → muted, success → theme "success" or foreground.
+  // herdr.d.ts theme() has no "success" key (blocked, muted, foreground, done, unknown).
+  msgTone(t) {
+    if (this.msgLevel === "error") return t.blocked;
+    if (this.msgLevel === "success") return t.success || t.foreground;
+    return t.muted;
+  }
+
   init(_props, cx) {
     this.path = `${appHome()}/programs.json`;
     this.backup = `${appHome()}/programs.json.more-agents.bak`;
@@ -268,7 +312,10 @@ export default class MoreAgents extends View {
       const hint = a?.install || a?.docs || "";
       parts.push(`Added ${k}; it shows in the + menu once \`${binOf(k)}\` is on your PATH${hint ? ` (${hint})` : ""}.`);
     }
-    return { text: parts.join(" "), allReady: later.length === 0 };
+    // The dialog keeps every hint. The toast only gets the count.
+    const need = bases.length;
+    const toast = need ? `Added ${keys.length}; ${need} need${need === 1 ? "s" : ""} install` : `Added ${keys.length}`;
+    return { text: parts.join(" "), allReady: later.length === 0, toast };
   }
 
   // Read → change → write only if nobody touched it in between. The backup is
@@ -363,7 +410,7 @@ export default class MoreAgents extends View {
               r.warning,
               r.skipped.length ? `Already in your programs.json (left untouched): ${r.skipped.join(", ")}.` : "",
             ].filter(Boolean).join(" ");
-            notify({ title: "More agents", body: [added.text, r.warning].filter(Boolean).join(" "), level: added.allReady && !r.warning ? "success" : "info" });
+            notify({ title: "More agents", body: [added.toast ?? added.text, r.warning].filter(Boolean).join(" "), level: added.allReady && !r.warning ? "success" : "info" });
           } else {
             this.msg = [
               r.skipped.length ? `Already in your programs.json (left untouched): ${r.skipped.join(", ")}.` : "Nothing to add.",
@@ -430,14 +477,14 @@ export default class MoreAgents extends View {
   addSelected(cx) {
     const ids = new Set(this.selectable());
     const pairs = CATALOG.filter((a) => ids.has(a.id)).flatMap((a) => entries(a, this.withContinue));
-    if (!pairs.length) { this.msg = "Check at least one agent."; cx.notify(); return; }
+    if (!pairs.length) { this.say("warning", "Check at least one agent."); cx.notify(); return; }
     this.addEntries(pairs, cx);
   }
 
   // Marks the offending field, moves the keyboard there, and says why.
   fail(field, text, cx) {
     this.invalidField = field;
-    this.msg = text;
+    this.say("error", text);
     this.moveFocus(field, cx);
     cx?.notify?.();
   }
@@ -478,7 +525,7 @@ export default class MoreAgents extends View {
     if (inCatalog || inFile) {
       const where = [inFile ? "your programs.json" : "", inCatalog ? "the catalog" : ""].filter(Boolean).join(" and ");
       this.confirm = { kind: "overwrite", key, entry, where };
-      this.msg = `"${key}" is already in ${where}: overwrite it or keep it as is?`;
+      this.say("warning", `"${key}" is already in ${where}: overwrite it or keep it as is?`);
       this.moveFocus("confirm-keep", cx);
       return;
     }
@@ -499,13 +546,14 @@ export default class MoreAgents extends View {
         });
         if (r) {
           await this.detect();
-          this.msg = [`Saved ${key} in your programs.json.`, r.warning].filter(Boolean).join(" ");
+          const saved = [`Saved ${key} in your programs.json.`, r.warning].filter(Boolean).join(" ");
+          this.say(r.warning ? "warning" : "success", saved);
           notify({ title: "More agents", body: `Saved ${key}.`, level: r.warning ? "info" : "success" });
           for (const i of Object.values(this.inputs)) i.set_value("");
           this.invalidField = null;
         }
       } catch (e) {
-        this.msg = `Could not save ${key}: ${errText(e)}.`;
+        this.say("error", `Could not save ${key}: ${errText(e)}.`);
       } finally {
         this.busy = false;
         cx.notify();
@@ -523,12 +571,12 @@ export default class MoreAgents extends View {
     if (c.kind === "remove") {
       this.moveFocus("add-selected", cx); // the confirm buttons are gone
       if (overwrite) this.remove(c.keys, cx, true);
-      else this.msg = "Kept.";
+      else this.say("info", "Kept.");
       cx.notify();
       return;
     }
     if (!overwrite) {
-      this.msg = `Kept the existing "${c.key}".`;
+      this.say("info", `Kept the existing "${c.key}".`);
       this.moveFocus("key", cx);
       return;
     }
@@ -612,17 +660,24 @@ export default class MoreAgents extends View {
 
   button(id, label, onClick, t, primary = false) {
     const focused = this.focusedField === id;
-    return div().id(id).h(26).px(10).flex().flex_none().items_center().rounded(6).text_size(12).cursor_pointer()
+    // Add, Add custom and Remove are the saves. disabled() blocks activation;
+    // opacity is the visible disabled state (the host does not draw one).
+    const saves = id === "add-selected" || id === "add-custom" || id.startsWith("rm-");
+    const locked = this.busy && saves;
+    this.note(locked ? `disabled:${id}` : `button:${id}`);
+    let el = div().id(id).h(26).px(10).flex().flex_none().items_center().rounded(6).text_size(12)
       .bg(primary ? t.solid : t.raised).text_color(primary ? t.solid_foreground : t.foreground)
       .border_1().border_color(focused ? t.accent : primary ? t.solid : t.raised)
       .role("button").accessibility_label(label)
-      .when(this.handles[id], (el) => el.track_focus(this.handles[id]))
-      .hover((s) => s.opacity(0.88))
+      .when(this.handles[id], (node) => node.track_focus(this.handles[id]));
+    el = locked ? el.opacity(0.4).disabled(true).cursor_default() : el.cursor_pointer().hover((s) => s.opacity(0.88));
+    return el
       // stop_propagation: the click must not also reach the row (clicks bubble up to parents).
       .on_click((_e, cx) => {
         cx.stop_propagation();
         if (this.inputs[id] || this.handles[id] || id.startsWith("row-")) this.moveFocus(id, cx);
-        if (!this.busy) onClick(cx);
+        if (locked || (this.busy && id !== "close")) return;
+        onClick(cx);
       })
       .child(label);
   }
@@ -632,25 +687,35 @@ export default class MoreAgents extends View {
       .flex().items_center().justify_center().text_size(11).text_color(t.solid_foreground).child(on ? "✓" : "");
   }
 
-  row(a, t) {
+  // PATH is three states. `undefined` is "could not check", never "in the + menu".
+  rowFacts(a) {
     const hasRun = Boolean(runOf(this.table?.programs?.[a.id]));
     const added = this.ours().includes(a.id) && hasRun;
-    const yours = hasRun && !added; // you already have it in your programs.json (e.g. set up by hand)
+    const yours = hasRun && !added;
     const builtin = a.status === "builtin";
     const offer = a.status === "verified" && !added && !yours;
-    const inst = this.onPath[a.run[0]];
+    const inst = this.onPath[a.run?.[0]];
+    const pathBadge = inst === true ? "installed" : inst === false ? "not found on this PATH" : "could not check";
+    const state = builtin ? "already ships with Herdr"
+      : added ? (inst === true ? "in the + menu" : inst === false ? "added · not installed yet" : "could not check")
+      : yours ? "already in your programs.json"
+      : a.status === "unverified" ? "unverified" : "";
+    const hint = a.install || a.docs || "";
+    const where = !builtin && inst === false && hint ? `${pathBadge} · ${hint}` : pathBadge;
+    return { added, yours, builtin, offer, inst, pathBadge, state, where };
+  }
+
+  row(a, t) {
+    const { added, builtin, offer, inst, state, where } = this.rowFacts(a);
+    this.note(`${a.name} :: ${state} :: ${where}`);
     const sel = this.selected.has(a.id);
     const rowId = `row-${a.id}`;
     const focused = this.focusedField === rowId;
-    const state = builtin ? "already ships with Herdr" : added ? (inst === false ? "added · not installed yet" : "in the + menu") : yours ? "already in your programs.json" : a.status === "unverified" ? "unverified" : "";
-    const hint = a.install || a.docs || "";
-    const where = inst === true ? "installed"
-      : inst === false ? (added ? `will show in the + menu once you install \`${a.run[0]}\`${hint ? " · " + hint : ""}` : `not installed${hint ? " · " + hint : ""}`)
-      : "";
+    const pathColor = inst === true ? t.done : inst === false ? t.muted : t.unknown;
     return h_flex().id(`row-${a.id}`).px(8).py(5).gap(10).items_center().rounded(8)
       .border_1().border_color(focused ? t.accent : t.popover)
       .role("list_box_option").aria_selected(sel)
-      .accessibility_label(`${a.name} · ${a.run.join(" ")}${state ? ` · ${state}` : ""}`)
+      .accessibility_label(`${a.name} · ${a.run.join(" ")}${state ? ` · ${state}` : ""} · ${where}`)
       // Rows are reachable with the arrow keys and Space/Enter, but they are not
       // Tab stops: Tab goes from the command to the continue checkbox.
       .when(offer, (el) => el.cursor_pointer().tab_stop(false)
@@ -662,13 +727,13 @@ export default class MoreAgents extends View {
           cx.notify();
         }))
       .child(offer ? this.check(sel, t) : div().w(16).flex_none())
-      .child(v_flex().flex_1().min_w(0)
-        .child(h_flex().gap(6).items_center()
-          .child(div().text_size(13).text_color(builtin ? t.dim : t.foreground).truncate().child(a.name))
-          .child(div().text_size(11).text_color(t.dim).flex_none().child(a.run.join(" ")))
+      .child(v_flex().flex_1().min_w(0).gap(1)
+        .child(h_flex().gap(6).items_center().min_w(0)
+          .child(div().min_w(0).text_size(13).text_color(builtin ? t.dim : t.foreground).truncate().child(a.name))
           .when(Boolean(state), (el) => el.child(div().text_size(10.5).px(5).rounded(4).bg(t.raised).text_color(t.muted).flex_none().child(state))))
-        // No truncate: the install hint can be long (Goose) and wraps onto several lines.
-        .when(Boolean(where) && !builtin, (el) => el.child(div().w_full().text_size(10.5).line_height("14px").text_color(inst ? t.dim : t.muted).child(where))))
+        // The command wraps on its own line so a long argv cannot push the row sideways.
+        .child(div().w_full().min_w(0).text_size(11).text_color(t.dim).whitespace_normal().child(a.run.join(" ")))
+        .when(!builtin, (el) => el.child(div().w_full().min_w(0).text_size(10.5).line_height("14px").text_color(pathColor).whitespace_normal().child(where))))
       .when(added, (el) => el.child(this.button(`rm-${a.id}`, "Remove", (cx) => this.remove([a.id, `${a.id}-continue`], cx), t)));
   }
 
@@ -686,6 +751,8 @@ export default class MoreAgents extends View {
     const contFocused = this.focusedField === "continue";
     const pv = this.runPreview();
     const n = this.selectable().length;
+    this.shown = [];
+    const status = this.busy || Boolean(this.confirm) || Boolean(this.msg);
     return v_flex().size_full().bg(t.popover).p(14).gap(8).text_size(13)
       .id("more-agents").track_focus(this.rootHandle).role("dialog").accessibility_label("More agents for the + menu")
       // Keys travel the focus path, so one handler here covers inputs and controls.
@@ -694,7 +761,7 @@ export default class MoreAgents extends View {
         .child(div().text_size(14).font_semibold().text_color(t.foreground).child("More agents for the + menu"))
         .child(this.button("close", "Close", () => closeOverlay(props().overlay), t)))
       .child(div().text_size(11.5).text_color(t.muted).child(`Writes to ${this.path}; after a successful save the previous version goes to programs.json.more-agents.bak (best-effort: a backup failure is reported, not blocking the write). Herdr reloads it by itself.`))
-      .when(Boolean(this.error), (el) => el.child(div().p(8).rounded(6).bg(t.raised).text_color(t.blocked).text_size(12).child(this.error)))
+      .when(Boolean(this.error), (el) => el.child(div().flex_none().max_h(72).overflow_y_scrollbar().p(8).rounded(6).bg(t.raised).text_color(t.blocked).text_size(12).whitespace_normal().child(this.note(this.error))))
       .child(v_flex().id("catalog").role("list_box").accessibility_label("Agents").flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
         .children(list.map((a) => this.row(a, t)))
         .children(custom.map((k) => {
@@ -725,10 +792,13 @@ export default class MoreAgents extends View {
         .child(div().flex_none().text_size(11).text_color(t.muted).child("run:"))
         .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(pv.error ? t.blocked : t.dim).child(pv.error ?? JSON.stringify(pv.argv)))
         .when(pv.missing, (e2) => e2.child(div().flex_none().text_size(11).text_color(t.blocked).child(`\`${pv.argv[0]}\` is not on your PATH`)))))
-      .when(Boolean(this.confirm), (el) => el.child(h_flex().gap(8).items_center().p(8).rounded(6).bg(t.raised)
-        .child(div().flex_1().text_size(11.5).text_color(t.blocked).child(this.msg))
-        .child(this.button("confirm-yes", this.confirm.kind === "remove" ? "Remove anyway" : "Overwrite", (cx) => this.resolveConfirm(true, cx), t, true))
-        .child(this.button("confirm-keep", this.confirm.kind === "remove" ? "Keep" : "Keep as is", (cx) => this.resolveConfirm(false, cx), t))))
-      .when(Boolean(this.msg) && !this.confirm, (el) => el.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : t.muted).child(this.msg)));
+      // Capped and scrolled so a long error or install hint cannot push the list out of the 640×640 dialog.
+      .when(status, (el) => el.child(v_flex().flex_none().max_h(72).overflow_y_scrollbar().gap(4)
+        .when(this.busy, (e2) => e2.child(div().text_size(11.5).text_color(t.muted).child(this.note("Saving…"))))
+        .when(Boolean(this.confirm), (e2) => e2.child(h_flex().gap(8).items_center().p(8).rounded(6).bg(t.raised)
+          .child(div().flex_1().min_w(0).text_size(11.5).text_color(this.msgTone(t)).whitespace_normal().child(this.msg))
+          .child(this.button("confirm-yes", this.confirm.kind === "remove" ? "Remove anyway" : "Overwrite", (cx) => this.resolveConfirm(true, cx), t, true))
+          .child(this.button("confirm-keep", this.confirm.kind === "remove" ? "Keep" : "Keep as is", (cx) => this.resolveConfirm(false, cx), t))))
+        .when(Boolean(this.msg) && !this.confirm, (e2) => e2.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : this.msgTone(t)).whitespace_normal().child(this.msg)))));
   }
 }
