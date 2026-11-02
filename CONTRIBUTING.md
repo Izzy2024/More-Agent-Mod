@@ -18,6 +18,7 @@ The catalog is `mods/more-agents/catalog.js`. It has `//` comments at the top, t
      "icon": "icons/agent.svg",
      "status": "verified",
      "source": "https://mi-agente.dev/docs/cli",
+     "checked": "2026-11-01",
      "note": "Opcional: algo que el usuario deba saber."
    }
    ```
@@ -31,9 +32,10 @@ The catalog is `mods/more-agents/catalog.js`. It has `//` comments at the top, t
    | `continue` | no | argv to resume the last session, using the same binary. **Only if that flag is documented.** |
    | `install` | no | Official install command. If there is none, `docs` is shown instead. |
    | `docs` | yes | https URL of the documentation. |
-   | `icon` | yes | `icons/<nombre>.svg`, one of the icons Herdr ships (`defaults/icons/` in herdr-app). If the agent has no icon of its own, use `icons/agent.svg`. Logos cannot be added here. |
+   | `icon` | yes | `icons/<nombre>.svg`, one of the icons Herdr ships (`defaults/icons/` in herdr-app), or `mods/more-agents/icons/<nombre>.svg` for an icon that belongs to this mod (compatible license). If the agent has no icon of its own, use `icons/agent.svg`. |
    | `status` | yes | `verified`: command taken from official docs. `unverified`: listed, but not offered. `builtin`: Herdr already ships it with `run`. |
    | `source` | yes | URL where `run` (and `continue`) is checked. |
+   | `checked` | required for `verified` | Date (`YYYY-MM-DD`) of the last review of `source`. The validator rejects a verified entry without a real calendar date. |
    | `note` | no | Short text. |
 
 2. **Do not invent commands.** `run`, `continue`, and `install` have to come from the documentation or the official README you cite in `source`. If you cannot confirm them, use `"status": "unverified"` or leave `continue` out.
@@ -45,9 +47,13 @@ The catalog is `mods/more-agents/catalog.js`. It has `//` comments at the top, t
    # con un clon de herdr-app al lado, también comprueba iconos y builtin:
    node scripts/validate-catalog.mjs --icons ../herdr-app/defaults/icons --builtin ../herdr-app/defaults/programs.json
    node scripts/smoke-test.mjs
+   # or: npm run check
    ```
 
-5. In the pull request, link the source and say how you tested it: the agent shows in the + menu and starts.
+   A `verified` entry without `checked`, an unknown field, an icon that does not
+   exist, or a `builtin` that Herdr does not ship with `run` is an error.
+
+5. In the pull request, link the source and say how you tested it: the agent shows in the + menu and starts. Bump `checked` whenever you re-verify an entry.
 
 ## Code changes
 

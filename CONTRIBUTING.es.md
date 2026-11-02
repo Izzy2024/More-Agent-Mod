@@ -18,6 +18,7 @@ El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y d
      "icon": "icons/agent.svg",
      "status": "verified",
      "source": "https://mi-agente.dev/docs/cli",
+     "checked": "2026-11-01",
      "note": "Opcional: algo que el usuario deba saber."
    }
    ```
@@ -31,9 +32,10 @@ El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y d
    | `continue` | no | argv para retomar la última sesión, con el mismo binario. **Solo si está documentado.** |
    | `install` | no | Comando de instalación oficial. Si no hay uno, se muestra `docs`. |
    | `docs` | sí | URL https de la documentación. |
-   | `icon` | sí | `icons/<nombre>.svg`, de los iconos que trae Herdr (`defaults/icons/` en herdr-app). Si no hay uno del agente, usa `icons/agent.svg`. No se pueden añadir logos aquí. |
+   | `icon` | sí | `icons/<nombre>.svg`, de los iconos que trae Herdr (`defaults/icons/` en herdr-app), o `mods/more-agents/icons/<nombre>.svg` para un icono propio del mod (licencia compatible). Si no hay uno del agente, usa `icons/agent.svg`. |
    | `status` | sí | `verified`: comando sacado de docs oficiales. `unverified`: se lista pero no se ofrece. `builtin`: Herdr ya lo trae con `run`. |
    | `source` | sí | URL donde se comprueba `run` (y `continue`). |
+   | `checked` | obligatorio en `verified` | Fecha (`YYYY-MM-DD`) de la última revisión de `source`. El validador rechaza un verified sin fecha real. |
    | `note` | no | Texto corto. |
 
 2. **No inventes comandos.** `run`, `continue` e `install` tienen que salir de la documentación o del README oficial que pones en `source`. Si no lo puedes confirmar, usa `"status": "unverified"` o deja fuera `continue`.
@@ -45,9 +47,13 @@ El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y d
    # con un clon de herdr-app al lado, también comprueba iconos y builtin:
    node scripts/validate-catalog.mjs --icons ../herdr-app/defaults/icons --builtin ../herdr-app/defaults/programs.json
    node scripts/smoke-test.mjs
+   # o: npm run check
    ```
 
-5. En el PR, enlaza la fuente y di cómo lo probaste: el agente aparece en el menú + y arranca.
+   Un `verified` sin `checked`, un campo desconocido, un icono que no existe o
+   un `builtin` que Herdr no trae con `run` son error.
+
+5. En el PR, enlaza la fuente y di cómo lo probaste: el agente aparece en el menú + y arranca. Actualiza `checked` cada vez que revises una entrada.
 
 ## Cambios de código
 
