@@ -51,12 +51,12 @@ It needs POSIX `sh` and `ps` (macOS or Linux). On startup it puts `/usr/bin` and
 | OpenCode | `opencode` | Herdr built-in | native OSC 7501 |
 | Oh My Pi | `omp` | this catalog | native OSC 7501 |
 | Empryo | `empryo` | none in this mod | adapter: `bridges/empryo` |
-| Cursor CLI | `cursor` | Herdr built-in, also listed in the catalog | adapter not in this repo yet |
-| Command Code | `command-code` | this catalog | adapter not in this repo yet |
+| Cursor CLI | `cursor` | Herdr built-in, also listed in the catalog | adapter: `bridges/cursor` |
+| Command Code | `command-code` | this catalog | adapter: `bridges/command-code` |
 
 Claude Code, Codex, and OpenCode are listed because they are the native reporters Herdr already understands. The other agents in `catalog.js` (Kilo, Qwen Code, Goose, Aider, and the rest) stay off this table until that agent's own output has been checked. A fork relationship is not that check.
 
-Cursor and Command Code are the next adapters. This tree does not install them.
+These adapters are opt-in. Installing the mod does not run them.
 
 ## Add an adapter
 
@@ -64,13 +64,13 @@ Three steps. The Empryo installer is the reference.
 
 1. Create `bridges/<id>/install.mjs`. That directory holds the adapter only. Leave `bridges/lib/herdr-osc.sh` as the single emitter.
 2. Call the shared emitter with that agent's app id: `sh <absolute-path-to>/bridges/lib/herdr-osc.sh <id> <state>`. `<id>` is the `app=` value Herdr should show.
-3. Map that agent's own events onto `idle`, `working`, or `blocked`. Merge the rules into its hook file, leave every other hook in place, write a backup before a change, do nothing on a second run when the rules already match, and support `--uninstall`, which removes only commands that run `herdr-osc.sh` with this app id.
+3. Map that agent's own events onto `idle`, `working`, or `blocked`. Merge the rules into its hook file, leave every other hook in place, write a backup before a change, do nothing on a second run when the rules already match, and support `--uninstall`, which removes only commands that run `herdr-osc.sh` with this app id. If the agent keeps a trust list, record and remove only this adapter's command fingerprints.
 
 The mod stays out of this. An adapter runs when a person runs it.
 
 ## Security
 
-A command hook is a command the agent runs as you. Read `bridges/lib/herdr-osc.sh` and the `command` string the installer writes before you install. The emitter writes the OSC 7501 sequence above to a TTY device of an ancestor process. It does not read the hook payload. An installer edits that agent's hook file and, when the file already exists and the run would change it, copies it to a sibling backup. It does not start the agent, and it does not change `programs.json`.
+A command hook is a command the agent runs as you. Read `bridges/lib/herdr-osc.sh` and the `command` string the installer writes before you install. The emitter writes the OSC 7501 sequence above to a TTY device of an ancestor process. It does not read the hook payload. The Command Code `PreToolUse` command is the exception: it reads the hook JSON far enough to see `tool_name`, then runs the emitter. It does not send the payload anywhere else. An installer edits that agent's hook file and, when the file already exists and the run would change it, copies it to a sibling backup. It does not start the agent, and it does not change `programs.json`.
 
 The hook file can name any command. Treat a later edit to `command` as a new script.
 
@@ -82,7 +82,7 @@ From this checkout:
 node bridges/<id>/install.mjs --uninstall
 ```
 
-That removes hooks whose command runs `herdr-osc.sh` with that adapter's app id, on any event, and leaves the rest of the file. It does not remove the More agents mod. When the file changes, the installer refreshes that adapter's backup first.
+That removes hooks whose command runs `herdr-osc.sh` with that adapter's app id, on any event, and leaves the rest of the file. For Command Code it also removes those commands' fingerprints from `~/.commandcode/trusted-hooks.json` and leaves every other fingerprint. It does not remove the More agents mod. When a file changes, the installer refreshes that adapter's backup of that file first.
 
 Deleting the checkout, or moving it, stops reports: the hook command points at `bridges/lib/herdr-osc.sh` inside that checkout. Run the installer again from the new path.
 
@@ -112,3 +112,50 @@ A run that changes an existing file copies it to `~/.empryo/hooks.json.bak-herdr
 A command left by the earlier hand-installed bridge (`~/.local/share/herdr-empryo-osc/herdr-osc.sh` plus a state, and no app argument) is the same reporter. Install replaces it with a call to the shared emitter. `--uninstall` removes that command too. Hooks that call `herdr-osc.sh` with any other app id stay.
 
 Start Empryo from a Herdr terminal. Agents can show it after a hook has written OSC 7501 into that terminal. The + menu is a separate step: this adapter does not add a launcher.
+
+## Cursor
+
+Hook file: `~/.cursor/hooks.json`, version 1. Cursor's events are camelCase. Each entry is a flat `{ "command": "sh <lib> cursor <state>", "timeout": 10 }`. A new file is `{ "version": 1, "hooks": { ... } }`. When an event already stores grouped `{ "hooks": [ ... ] }` rules, that shape is kept. Other hooks, including Orca, stay on the event and on events this adapter does not use.
+
+| Cursor event | State |
+| --- | --- |
+| `sessionStart` | `idle` |
+| `beforeSubmitPrompt` | `working` |
+| `preToolUse` | `working` |
+| `postToolUse` | `working` |
+| `stop` | `idle` |
+
+```sh
+node bridges/cursor/install.mjs
+node bridges/cursor/install.mjs --uninstall
+```
+
+A run that changes an existing file copies it to `~/.cursor/hooks.json.bak-herdr-cursor-osc`, replacing the previous backup. Invalid JSON is left untouched. A second install from the same checkout writes nothing.
+
+A command left by the earlier hand-installed bridge (`~/.local/share/herdr-cursor-osc/herdr-osc.sh` plus a state, and no app argument) is the same reporter. Install replaces it with a call to the shared emitter. `--uninstall` removes that command too. Hooks that call `herdr-osc.sh` with any other app id stay.
+
+## Command Code
+
+Hook file: `~/.commandcode/settings.json`. Trust file: `~/.commandcode/trusted-hooks.json`. Events use Claude's grouped rules: `{ "hooks": [ { "type": "command", "command": "...", "timeout": 10 } ] }`. Other settings keys, matchers, and hooks stay.
+
+| Command Code event | State |
+| --- | --- |
+| `SessionStart` | `idle` |
+| `PreToolUse` | `working`, or `blocked` when `tool_name` is `AskUserQuestion`, `Question`, or `ask_user_question` |
+| `PostToolUse` | `working` |
+| `Stop` | `idle` |
+
+`SessionStart`, `PostToolUse`, and `Stop` call `sh <lib> command-code <state>` directly. `PreToolUse` is a short shell command: it reads the hook JSON from stdin, picks the state from `tool_name`, and execs that same emitter. It does not write OSC 7501 itself, and it does not watch the screen.
+
+Command Code trusts a command by its fingerprint, `sha256(command)` hex sliced to 16 characters. Install records one entry per distinct command on the `""` root and on every root already in the trust file, with `{ "fingerprint", "trustedAt" }`. A fingerprint that is already present keeps its `trustedAt`. Other fingerprints stay. `--uninstall` removes only this adapter's fingerprints, and drops a root that becomes empty.
+
+```sh
+node bridges/command-code/install.mjs
+node bridges/command-code/install.mjs --uninstall
+```
+
+A run that changes an existing file copies it to a sibling ending in `.bak-herdr-command-code-osc` (`settings.json` and, when that file changes, `trusted-hooks.json`). Invalid JSON is left untouched. A second install from the same checkout writes neither file.
+
+A command left by the earlier hand-installed bridge (`~/.local/share/herdr-cmd-osc/herdr-osc.sh`, with no app argument) is removed and replaced. Its fingerprint is removed with it. This adapter does not start that bridge's screen watcher.
+
+Start Command Code from a Herdr terminal. Agents can show it after a hook has written OSC 7501 into that terminal. The + menu is a separate step: this adapter does not add a launcher.
