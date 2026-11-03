@@ -148,6 +148,23 @@ console.log("ok 4: icons");
 }
 console.log("ok 5: builtin fixture");
 
+// Bridge metadata: a real adapter passes; a path outside bridges/ or one with
+// no installer does not.
+{
+  const base = { ...catalogBody().find((e) => e.id === "command-code") };
+  const okFile = writeFixture("bridge-ok", { ...base, id: "bridge-ok" });
+  const okRoot = join(dirname(okFile), "..", "..");
+  fs.mkdirSync(join(okRoot, "bridges", "command-code"), { recursive: true });
+  fs.writeFileSync(join(okRoot, "bridges", "command-code", "install.mjs"), "// fixture\n");
+  let r = run("scripts/validate-catalog.mjs", [okFile]);
+  assert.equal(r.status, 0, r.out);
+  r = run("scripts/validate-catalog.mjs", [writeFixture("bridge-bad", { ...base, id: "bridge-bad", bridge: "../evil" })]);
+  assert.notEqual(r.status, 0, "a bridge outside bridges/ is rejected");
+  r = run("scripts/validate-catalog.mjs", [writeFixture("bridge-missing", { ...base, id: "bridge-missing", bridge: "bridges/nope" })]);
+  assert.notEqual(r.status, 0, "a bridge without install.mjs is rejected");
+}
+console.log("ok 5b: bridge field");
+
 // 6. --dry-run writes nothing.
 const appHome = join(HOME, "app-home");
 {

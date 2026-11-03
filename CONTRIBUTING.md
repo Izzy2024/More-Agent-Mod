@@ -36,6 +36,7 @@ The catalog is `mods/more-agents/catalog.js`. It has `//` comments at the top, t
    | `status` | yes | `verified`: command taken from official docs. `unverified`: listed, but not offered. `builtin`: Herdr already ships it with `run`. |
    | `source` | yes | URL where `run` (and `continue`) is checked. |
    | `checked` | required for `verified` | Date (`YYYY-MM-DD`) of the last review of `source`. The validator rejects a verified entry without a real calendar date. |
+   | `bridge` | no | `bridges/<id>` when the agent does not report OSC 7501 and this repo ships an adapter for it. The validator checks that `bridges/<id>/install.mjs` exists. |
    | `note` | no | Short text. |
 
 2. **Do not invent commands.** `run`, `continue`, and `install` have to come from the documentation or the official README you cite in `source`. If you cannot confirm them, use `"status": "unverified"` or leave `continue` out.

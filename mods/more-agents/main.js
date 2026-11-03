@@ -17,6 +17,7 @@ const KEY_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 const RESERVED = new Set(["shell", "program", "agent"]);
 const WINDOWS = /^[A-Za-z]:[\\/]/.test(home()) || home().includes("\\");
 const TILE = { tint: true, tile: "#1c1d21", color: "#ffffff" };
+const BRIDGES_DOCS = "https://github.com/Izzy2024/More-Agent-Mod/tree/main/bridges";
 
 // Splits a command the way a program does, not the way a shell does: single and
 // double quotes group, and only \" and \\ escape; any other backslash is
@@ -536,8 +537,12 @@ export default class MoreAgents extends View {
           if (r.changed.length) {
             await this.detect(); // the message depends on whether the command is installed
             const added = this.addedMessage(r.changed);
+            // A catalog row that needs an OSC 7501 bridge says so, with the repo path.
+            const bridged = [...new Set(r.changed.map((k) => this.agentOf(k)).filter((a) => a?.bridge))];
+            const bridgeNotes = bridged.map((a) => `Agents panel: ${a.name} needs the status bridge ${a.bridge} — see ${BRIDGES_DOCS}.`);
             this.msg = [
               added.text,
+              ...bridgeNotes,
               r.warning,
               r.skipped.length ? `Already in your programs.json (left untouched): ${r.skipped.join(", ")}.` : "",
             ].filter(Boolean).join(" ");
@@ -711,7 +716,12 @@ export default class MoreAgents extends View {
     });
     if (r) {
       await this.detect();
-      const saved = [`Saved ${key} in your programs.json.`, note, r.warning].filter(Boolean).join(" ");
+      const saved = [
+        `Saved ${key} in your programs.json.`,
+        note,
+        r.warning,
+        `Agents panel: if it does not report OSC 7501, it needs a status bridge — see ${BRIDGES_DOCS}.`,
+      ].filter(Boolean).join(" ");
       const level = (note || r.warning) ? "warning" : "success";
       this.say(level, saved);
       this.ensureActionHandles(this.actionIds());

@@ -48,6 +48,7 @@ export default [
     "status": "verified",
     "source": "https://commandcode.ai/docs/reference/cli",
     "checked": "2026-11-01",
+    "bridge": "bridges/command-code",
     "note": "Herdr already ships a name and icon, but no run. On Windows the short alias is `cmdc`: `cmd` is the system shell."
   },
   {

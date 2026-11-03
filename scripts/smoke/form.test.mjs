@@ -263,5 +263,6 @@ assert.deepEqual(ep.run, ["ghost-cmd"]);
 assert.equal(m.msgLevel, "warning", "add anyway keeps saying it is not on PATH");
 assert.match(m.msg, /Saved ghost-agent/);
 assert.match(m.msg, /not on your PATH/);
+assert.match(m.msg, /Agents panel: if it does not report OSC 7501, it needs a status bridge/);
 
 console.log("form.test: keyboard/focus + custom form + PATH resolution OK; notifications:", notes.length);

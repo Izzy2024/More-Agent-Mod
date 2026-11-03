@@ -24,6 +24,7 @@ console.log("msg:", m.msg);
 // Install-aware message: omp is on the PATH (stub exec), command-code and droid are not.
 assert.match(m.msg, /omp, omp-continue: now show in the \+ menu/);
 assert.match(m.msg, /Added command-code; it shows in the \+ menu once `command-code` is on your PATH/);
+assert.match(m.msg, /Agents panel: Command Code needs the status bridge bridges\/command-code/);
 assert.match(m.msg, /Added droid; it shows .*`droid`/); assert.ok(!/Added droid-continue/.test(m.msg));
 assert.equal(m.selected.size, 0, "selection cleared after add");
 assert.equal(notes.at(-1).level, "info");
