@@ -13,6 +13,7 @@ const builtinPath = opt("--builtin");
 const here = dirname(fileURLToPath(import.meta.url));
 const file = resolve(args[0] ?? join(here, "..", "mods", "more-agents", "catalog.js"));
 const modRoot = dirname(file);
+const repoRoot = resolve(modRoot, "..", "..");
 
 const errors = [];
 const err = (where, msg) => errors.push(`${where}: ${msg}`);
@@ -24,7 +25,7 @@ if (!m) { console.error(`${file}: must be // comments followed by \`export defau
 let list;
 try { list = JSON.parse(m[1]); } catch (e) { console.error(`${file}: the body is not strict JSON: ${e.message}`); process.exit(1); }
 
-const KEYS = new Set(["id", "name", "run", "match", "continue", "install", "docs", "icon", "status", "source", "checked", "note"]);
+const KEYS = new Set(["id", "name", "run", "match", "continue", "install", "docs", "icon", "status", "source", "checked", "bridge", "note"]);
 const STATUS = new Set(["verified", "unverified", "builtin"]);
 const ID = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 const URL_RE = /^https:\/\/\S+$/;
@@ -74,6 +75,10 @@ for (const [i, e] of (Array.isArray(list) ? list : []).entries()) {
     if (!existsSync(join(modRoot, e.icon.slice("mods/more-agents/".length)))) err(at, `icon ${e.icon} does not exist in ${modRoot}`);
   } else if (iconsDir && !existsSync(join(iconsDir, e.icon.slice("icons/".length)))) {
     err(at, `icon ${e.icon} does not exist in ${iconsDir}`);
+  }
+  if (e.bridge !== undefined) {
+    if (typeof e.bridge !== "string" || !/^bridges\/[a-z0-9._-]+$/.test(e.bridge)) err(at, 'bridge: "bridges/<id>"');
+    else if (!existsSync(join(repoRoot, e.bridge, "install.mjs"))) err(at, `bridge ${e.bridge}/install.mjs does not exist`);
   }
   if (e.note !== undefined && typeof e.note !== "string") err(at, "note: text");
   if (builtin && typeof e.id === "string") {
