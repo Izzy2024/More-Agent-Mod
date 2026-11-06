@@ -11,7 +11,8 @@ const URL = "https://[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]+)?/[A-Za-z0-9._~%/-]*";
 // Full command shapes. Anything a shell could chain on (`;`, `&`, `$(`, `>`,
 // `<`, a second `|`…) cannot survive these patterns.
 const SHAPES = [
-  new RegExp(`^npm (?:i|install) -g ${PKG}(?: ${PKG})*$`),
+  new RegExp(`^npm (?:i|install) -g(?: --ignore-scripts)? ${PKG}(?: ${PKG})*$`),
+  new RegExp(`^uv tool install ${PKG}(?: ${PKG})*$`),
   new RegExp(`^(?:python -m pip|pip) install ${PKG}(?: ${PKG})*$`),
   new RegExp(`^brew install ${PKG}(?: ${PKG})*$`),
   new RegExp(`^curl -(?:fsSL|LsSf) ${URL} \\| (?:sh|bash)$`),

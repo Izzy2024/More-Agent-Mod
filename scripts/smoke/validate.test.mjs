@@ -55,8 +55,8 @@ const writeFixture = (name, entry, { icon = true } = {}) => {
 {
   const r = run("scripts/validate-catalog.mjs", []);
   assert.equal(r.status, 0, r.out);
-  assert.match(r.out, /26 agents/);
-  assert.match(r.out, /20 verified/);
+  assert.match(r.out, /25 agents/);
+  assert.match(r.out, /19 verified/);
 
   const icons = join(HOME, "herdr-icons");
   fs.mkdirSync(icons, { recursive: true });
