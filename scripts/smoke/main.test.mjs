@@ -31,12 +31,13 @@ assert.equal(notes.at(-1).level, "info");
 // The counter only counts what can be added.
 m.selected.add("omp"); m.selected.add("kilo"); m.selected.add("gemini");
 assert.deepEqual(m.selectable(), ["kilo"]); m.selected.clear();
-// Tab moves focus key → name → command → continue; Shift+Tab goes backwards and
-// neither wraps (the full order is covered in form.test.mjs).
+// With the custom form open, Tab moves key → name and run → Add custom.
+// Shift+Tab goes backwards (the full order is covered in form.test.mjs).
 let stopped = 0; const kcx = { stop_propagation: () => { stopped++; } };
+m.customOpen = true;
 m.inputs.key._fire("focus"); m.formKey({ key: "tab", modifiers: {} }, kcx); assert.equal(m.focusedField, "name");
 m.formKey({ key: "tab", modifiers: { shift: true } }, kcx); assert.equal(m.focusedField, "key");
-m.focusedField = "run"; m.formKey({ key: "tab", modifiers: {} }, kcx); assert.equal(m.focusedField, "continue"); assert.equal(stopped, 3);
+m.focusedField = "run"; m.formKey({ key: "tab", modifiers: {} }, kcx); assert.equal(m.focusedField, "add-custom"); assert.equal(stopped, 3);
 m.formKey({ key: "a", modifiers: {} }, kcx); assert.equal(stopped, 3, "other keys pass through");
 m.inputs.key._set("My-Agent"); m.inputs.run._set("foo --bar"); m.addCustom(cx); await Promise.all(spawned.splice(0));
 assert.equal(m.confirm?.kind, "path-missing", "foo is not on PATH; it asks first");

@@ -96,6 +96,7 @@ console.log("ok 2: the search filters name, key and command");
   m.render();
   assert.ok(m.actionIds().includes("add-continue-command-code"), "the variant is offered");
   assert.ok(m.tabOrder().includes("add-continue-command-code"), "and it is a Tab stop");
+  m.customOpen = true;
   m.moveFocus("add-custom", cx);
   m.formKey({ key: "tab", modifiers: {} }, kcx);
   assert.equal(m.focusedField, "add-continue-command-code", "Tab lands on it");
