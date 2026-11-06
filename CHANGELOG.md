@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-06
+
+- Install with one command: `npx github:Izzy2024/More-Agent-Mod` (a `bin` entry; the package stays private). `--with-key` also binds Alt+Shift+A to `mod.open:more-agents` in `keys.json`, merging instead of replacing anything you already have, keeping one `keys.json.more-agents.bak`, and refusing to take a chord another command owns; `--uninstall` removes only that exact binding and never deletes the file. The installer warns (without failing) when `herdr-app` is older than 0.1.8.
+- README restructured around install and everyday use, with the internals in `docs/ARCHITECTURE.md` (and `.es.md`); `RECIPE.md` refreshed for the 25-agent catalog.
+- CI runs a syntax check (`scripts/check-syntax.mjs`) and a non-blocking offline catalog-freshness check on every push, plus an experimental `windows-latest` job (Windows is untested). Pull request and issue templates added.
 - The dialog lists repairs for a catalog command that drifted (`command-code` still launching `cmd`) and for an owned one-edit typo (`empryro-agent` next to `empryo-agent`). Nothing is written until you confirm. A builtin entry whose `match` contains the token `agent` is only warned about.
 - `programs.snippet.json` no longer matches `cmd`.
 - Catalog adds `dsh-tui` (OSC 7501 itself, so no bridge note). The list has a search box. "Add continue" is a Tab stop. The header can switch the chrome to Spanish; English stays the default. A checked agent hidden by the search is not added.

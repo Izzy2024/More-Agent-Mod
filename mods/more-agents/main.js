@@ -1364,8 +1364,8 @@ export default class MoreAgents extends View {
     return ids;
   }
 
-  // Row actions in render order. Remove buttons are Tab stops; Add continue
-  // stays a pointer action so the keyboard order stays short.
+  // Row actions in render order. Remove buttons and Add continue are Tab stops;
+  // Bridge, Install and Use full path are pointer-only so the keyboard order stays short.
   actionIds() {
     const p = this.table?.programs ?? {};
     const own = this.own();

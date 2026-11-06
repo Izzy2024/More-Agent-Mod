@@ -8,7 +8,7 @@ Adds coding agents that Herdr doesn't ship ready to start to its + menu: pick th
 
 ## Install
 
-`npx github:Izzy2024/More-Agent-Mod` (one command; needs `node` 22+ and the repo public on GitHub), or clone:
+`npx github:Izzy2024/More-Agent-Mod` (one command; needs `node` 22+), or clone:
 
 ```sh
 git clone https://github.com/Izzy2024/More-Agent-Mod.git && cd More-Agent-Mod && node scripts/install.mjs

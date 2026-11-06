@@ -50,6 +50,7 @@ The catalog is `mods/more-agents/catalog.js`. It has `//` comments at the top, t
    # con un clon de herdr-app al lado, también comprueba iconos y builtin:
    node scripts/validate-catalog.mjs --icons ../herdr-app/defaults/icons --builtin ../herdr-app/defaults/programs.json
    node scripts/smoke-test.mjs
+   node scripts/check-syntax.mjs
    node scripts/check-links.mjs --offline   # freshness only; omit --offline to request every docs and source URL
    # or: npm run check
    ```

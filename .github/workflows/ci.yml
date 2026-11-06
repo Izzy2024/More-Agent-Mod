@@ -33,8 +33,11 @@ jobs:
         run: node scripts/smoke-test.mjs
 
       # Freshness only: the network probe is the weekly catalog-health workflow,
-      # so a dead upstream URL never fails a push.
+      # so a dead upstream URL never fails a push. Not blocking either: an old
+      # `checked` date must not stop unrelated pull requests (the weekly
+      # catalog-health workflow is where it is acted on).
       - name: Catalog freshness (offline)
+        continue-on-error: true
         run: node scripts/check-links.mjs --offline
 
       # No herdr-app checkout in CI: build a local fixture from the catalog,

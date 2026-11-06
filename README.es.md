@@ -8,7 +8,7 @@ Añade al menú + de Herdr agentes de programación que no vienen listos para ar
 
 ## Instalar
 
-`npx github:Izzy2024/More-Agent-Mod` (un comando; necesita `node` 22+ y que el repositorio sea público en GitHub), o clona:
+`npx github:Izzy2024/More-Agent-Mod` (un comando; necesita `node` 22+), o clona:
 
 ```sh
 git clone https://github.com/Izzy2024/More-Agent-Mod.git && cd More-Agent-Mod && node scripts/install.mjs
