@@ -55,8 +55,8 @@ const writeFixture = (name, entry, { icon = true } = {}) => {
 {
   const r = run("scripts/validate-catalog.mjs", []);
   assert.equal(r.status, 0, r.out);
-  assert.match(r.out, /20 agents/);
-  assert.match(r.out, /14 verified/);
+  assert.match(r.out, /26 agents/);
+  assert.match(r.out, /20 verified/);
 
   const icons = join(HOME, "herdr-icons");
   fs.mkdirSync(icons, { recursive: true });
@@ -76,6 +76,7 @@ const base = {
   docs: "https://example.com",
   icon: "mods/more-agents/icons/own.svg",
   status: "verified",
+  tier: "official",
   source: "https://example.com/docs",
   checked: "2026-11-02",
 };
@@ -93,10 +94,37 @@ const base = {
     assert.notEqual(r.status, 0, `accepts ${bad}`);
     assert.match(r.out, /YYYY-MM-DD/);
   }
-  const unverified = run("scripts/validate-catalog.mjs", [writeFixture("unverified", { ...noChecked, status: "unverified" })]);
+  const unverifiedEntry = { ...noChecked, status: "unverified" };
+  delete unverifiedEntry.tier;
+  const unverified = run("scripts/validate-catalog.mjs", [writeFixture("unverified", unverifiedEntry)]);
   assert.equal(unverified.status, 0, unverified.out);
 }
 console.log("ok 2: checked date");
+
+// 2b. tier is required on verified and forbidden otherwise.
+{
+  const noTier = { ...base };
+  delete noTier.tier;
+  const missing = run("scripts/validate-catalog.mjs", [writeFixture("no-tier", noTier)]);
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.out, /tier/);
+
+  const community = run("scripts/validate-catalog.mjs", [writeFixture("tier-community", { ...base, tier: "community" })]);
+  assert.equal(community.status, 0, community.out);
+
+  const bad = run("scripts/validate-catalog.mjs", [writeFixture("tier-bad", { ...base, tier: "gold" })]);
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.out, /tier/);
+
+  const onUnverified = run("scripts/validate-catalog.mjs", [writeFixture("tier-unverified", { ...base, status: "unverified", tier: "official" })]);
+  assert.notEqual(onUnverified.status, 0);
+  assert.match(onUnverified.out, /tier/);
+
+  const onBuiltin = run("scripts/validate-catalog.mjs", [writeFixture("tier-builtin", { ...base, status: "builtin", tier: "community" })]);
+  assert.notEqual(onBuiltin.status, 0);
+  assert.match(onBuiltin.out, /tier/);
+}
+console.log("ok 2b: tier");
 
 // 3. continue must use run's binary; ids cannot repeat.
 {
@@ -134,7 +162,9 @@ console.log("ok 4: icons");
 
 // 5. builtin has to match what Herdr actually ships.
 {
-  const file = writeFixture("builtin", { ...base, status: "builtin" });
+  const builtinEntry = { ...base, status: "builtin" };
+  delete builtinEntry.tier;
+  const file = writeFixture("builtin", builtinEntry);
   const empty = join(HOME, "empty-programs.json");
   fs.writeFileSync(empty, JSON.stringify({ programs: {} }));
   const r = run("scripts/validate-catalog.mjs", [file, "--builtin", empty]);

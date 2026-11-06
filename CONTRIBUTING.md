@@ -17,6 +17,7 @@ The catalog is `mods/more-agents/catalog.js`. It has `//` comments at the top, t
      "docs": "https://mi-agente.dev/docs",
      "icon": "icons/agent.svg",
      "status": "verified",
+     "tier": "official",
      "source": "https://mi-agente.dev/docs/cli",
      "checked": "2026-11-01",
      "note": "Opcional: algo que el usuario deba saber."
@@ -34,6 +35,7 @@ The catalog is `mods/more-agents/catalog.js`. It has `//` comments at the top, t
    | `docs` | yes | https URL of the documentation. |
    | `icon` | yes | `icons/<nombre>.svg`, one of the icons Herdr ships (`defaults/icons/` in herdr-app), or `mods/more-agents/icons/<nombre>.svg` for an icon that belongs to this mod (compatible license). If the agent has no icon of its own, use `icons/agent.svg`. |
    | `status` | yes | `verified`: command taken from official docs. `unverified`: listed, but not offered. `builtin`: Herdr already ships it with `run`. |
+   | `tier` | required for `verified` | `official` or `community`. `official` means the vendor's own organization or documentation site published it, and `community` means a third-party or personal repository such as dsh-tui. The validator rejects a verified entry without it, and rejects it on any other status. |
    | `source` | yes | URL where `run` (and `continue`) is checked. |
    | `checked` | required for `verified` | Date (`YYYY-MM-DD`) of the last review of `source`. The validator rejects a verified entry without a real calendar date. |
    | `bridge` | no | `bridges/<id>` when the agent does not report OSC 7501 and this repo ships an adapter for it. The validator checks that `bridges/<id>/install.mjs` exists. |
@@ -48,6 +50,7 @@ The catalog is `mods/more-agents/catalog.js`. It has `//` comments at the top, t
    # con un clon de herdr-app al lado, también comprueba iconos y builtin:
    node scripts/validate-catalog.mjs --icons ../herdr-app/defaults/icons --builtin ../herdr-app/defaults/programs.json
    node scripts/smoke-test.mjs
+   node scripts/check-links.mjs --offline   # freshness only; omit --offline to request every docs and source URL
    # or: npm run check
    ```
 

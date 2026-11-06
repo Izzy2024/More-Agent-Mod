@@ -24,6 +24,8 @@ const EN = {
   sectionAdded: "Already in your + menu",
   sectionBuiltin: "Ships with Herdr",
   addOwn: "Add your own agent...",
+  // lane-catalog2
+  community: "community",
   continueLabel: 'Also add the "continue" variant (if it has one)',
   add: (n) => (n ? `Add ${n}` : "Add"),
   hint: "Custom agent · Tab: search, continue, Add, this form, Remove, Close (no wrap) · ↓ from search, then ↑/↓ and Space/Enter: agents · Enter in the command adds it",
@@ -64,6 +66,8 @@ const ES = {
   sectionAdded: "Ya están en tu menú +",
   sectionBuiltin: "Vienen con Herdr",
   addOwn: "Añadir tu propio agente...",
+  // lane-catalog2
+  community: "comunidad",
   continueLabel: 'Añadir también la variante "continue" (si la tiene)',
   add: (n) => (n ? `Añadir ${n}` : "Añadir"),
   hint: "Agente propio · Tab: búsqueda, continue, Añadir, este formulario, Remove, Cerrar (sin vuelta) · ↓ desde la búsqueda, luego ↑/↓ y Espacio/Intro: agentes · Intro en el comando lo añade",
