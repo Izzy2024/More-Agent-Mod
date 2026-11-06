@@ -99,7 +99,7 @@ console.log("ok 2: language persistence");
   m.addSelected(cx);
   await drain();
   assert.equal(m.msgLevel, "warning", "a pending install is a warning");
-  assert.match(m.msg, /^Añadido kilo; aparecerá en el menú \+ cuando `kilo` esté en tu PATH/);
+  assert.match(m.msg, /^Añadido kilo; aparecerá en el menú \+ cuando `kilo` esté instalado/);
   assert.match(m.msg, /npm install -g @kilocode\/cli/, "the catalog hint stays as is");
   assert.equal(notes.at(-1).body, "Añadidos 1; 1 necesita instalarse");
   noEnglish(m, "add with warning");
@@ -215,7 +215,7 @@ console.log("ok 6: custom form errors");
   await drain();
   assert.equal(m.confirm?.kind, "path-missing");
   assert.equal(m.msgLevel, "warning");
-  assert.match(m.msg, /^`ghost-cmd` no está en tu PATH, así que no aparecerá en el menú \+ hasta que exista\. ¿Añadirlo igualmente\?$/);
+  assert.match(m.msg, /^`ghost-cmd` no se encuentra en este equipo, así que no aparecerá en el menú \+ hasta que lo instales\. ¿Añadirlo igualmente\?$/);
   noEnglish(m, "path missing");
 
   m.resolveConfirm(false, cx);
@@ -227,14 +227,27 @@ console.log("ok 6: custom form errors");
   await drain();
   m.resolveConfirm(true, cx);
   await drain();
-  assert.equal(m.msgLevel, "warning", "the missing PATH keeps the warning");
+  assert.equal(m.msgLevel, "warning", "the missing command keeps the warning");
   assert.match(m.msg, /^Guardado ghost-agent en tu programs\.json\./);
-  assert.match(m.msg, /`ghost-cmd` no está en tu PATH/);
+  assert.match(m.msg, /`ghost-cmd` no se encuentra en este equipo/);
   assert.match(m.msg, /^.*Panel de agentes: si no informa OSC 7501, necesita un bridge de estado/);
   assert.deepEqual(read().programs["ghost-agent"].run, ["ghost-cmd"]);
   noEnglish(m, "add anyway");
 }
 console.log("ok 7: path-missing confirm");
+
+// 7b. lane-path: the badge words are Spanish, including the third state.
+{
+  const { m } = await boot({ programs: {}, onPath: "omp", lang: "es" });
+  m.foundAt = { kilo: "/Users/x/.local/bin/kilo" };
+  const text = painted(m);
+  assert.ok(text.includes("no instalado"), "a missing command says no instalado");
+  assert.ok(text.includes("instalado, pero Herdr no lo ve"), "foundAt is its own state");
+  assert.ok(text.includes("/Users/x/.local/bin/kilo"), "the found path is painted");
+  assert.ok(!text.includes("no está en este PATH"), "the old wording is gone");
+  noEnglish(m, "badges");
+}
+console.log("ok 7b: badge words");
 
 // 8. Overwrite question, keep, and the saved message.
 {
@@ -306,7 +319,7 @@ console.log("ok 10: detected banner");
   const { m, cx, drain } = await boot({ programs: {}, onPath: "omp", lang: "es" });
   const aider = m.agentOf("aider");
   assert.equal(m.previewInstall(aider, cx), true);
-  assert.match(m.msg, /^¿Instalar Aider\? Se ejecuta en una pestaña nueva: python -m pip install aider-install && aider-install$/);
+  assert.match(m.msg, /^¿Instalar Aider y añadirlo a tu menú \+ al terminar\? Se ejecuta en una pestaña nueva: python -m pip install aider-install && aider-install$/);
   noEnglish(m, "install confirm");
 
   m.resolveConfirm(false, cx);
@@ -317,7 +330,7 @@ console.log("ok 10: detected banner");
   m.resolveConfirm(true, cx);
   await drain();
   assert.equal(ran.length, 1);
-  assert.match(m.msg, /^Instalando Aider en una pestaña nueva; pulsa Volver a comprobar al terminar\.$/);
+  assert.match(m.msg, /^Esperando a que Aider termine de instalarse\.\.\.$/);
   noEnglish(m, "install started");
 
   assert.equal(m.previewInstall(m.agentOf("trae-agent"), cx), false);

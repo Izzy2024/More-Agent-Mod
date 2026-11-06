@@ -217,8 +217,7 @@ console.log("ok 6: Add all writes through edit()");
   assert.equal(ran[0].args.name, "Install Aider");
   assert.deepEqual(ran[0].args.argv.slice(0, 2), ["sh", "-c"]);
   assert.ok(ran[0].args.argv[2].startsWith("python -m pip install aider-install && aider-install;"));
-  assert.match(m.msg, /new tab/);
-  assert.match(m.msg, /Re-check/);
+  assert.match(m.msg, /^Waiting for Aider to finish installing/);
 }
 console.log("ok 7: confirm before run");
 

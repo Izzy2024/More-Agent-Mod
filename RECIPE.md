@@ -6,7 +6,7 @@ Adds coding agents Herdr doesn't ship ready to start, such as Oh My Pi (`omp`), 
 
 ## What you see
 
-A dialog titled "More agents for the + menu". The catalog has one row per agent: name, the command it runs, and whether that command is on your PATH. When the command is missing, the row shows how to install it. Rows you can add have a checkbox. Rows for agents Herdr already ships say so and are greyed. Below the list:
+A dialog titled "More agents for the + menu". The catalog has one row per agent: name, the command it runs, and whether it is installed. When the command is missing, the row shows how to install it. Rows you can add have a checkbox. Rows for agents Herdr already ships say so and are greyed. Below the list:
 
 - a "continue" checkbox;
 - an Add button with the number of agents you picked;
@@ -21,9 +21,9 @@ Open it with `mod.open more-agents` (command palette) or the key in keys.json.
 - An entry you already have with a command is never replaced.
 - After a successful write, the previous version is saved to `programs.json.more-agents.bak`, and the first write keeps the pre-mod file as `programs.json.more-agents.orig.bak` (never replaced). Both are best-effort: a failure is reported without blocking the write.
 - The write only goes through if nobody changed the file since it was read; a stale write is retried once from the new snapshot, and a second conflict writes nothing.
-- A custom agent whose command is not on the PATH asks first ("… will not show in the + menu until it exists. Add anyway?"), so a typo cannot slip in silently.
+- A custom agent whose command can't be found on this computer asks first ("… will not show in the + menu until it is installed. Add anyway?"), so a typo cannot slip in silently.
 - A broken programs.json is never written; the dialog names the failure (read, JSON, shape) and offers Reload instead of asking you to reopen it.
-- Rows carry a three-state PATH badge (`installed` / `not found on this PATH` / `could not check`), saves show "Saving…" with the buttons disabled, and the toast is a count ("Added 2; 1 needs install") while the dialog keeps the hints.
+- Rows say `installed`, `not installed`, `installed, but Herdr can't see it` or `could not check`, using your login shell (the same one the + menu starts programs with), saves show "Saving…" with the buttons disabled, and the toast is a count ("Added 2; 1 needs install") while the dialog keeps the hints.
 
 Herdr reloads the table live, so new agents show in the + menu at once.
 
@@ -43,7 +43,7 @@ It uses `readTextFile`, `writeTextFile`, `exec` (`command -v`, or `where` on Win
 
 - Status (working, blocked, done) only comes from agents that report OSC 7501. An agent that doesn't report it stays a plain terminal with its icon.
 - Most catalog agents use Herdr's generic agent icon.
-- Trae Agent lives in a uv virtualenv, so `trae-cli` has to be on your PATH.
+- Trae Agent lives in a uv virtualenv, so `trae-cli` has to be installed where your login shell can find it.
 - Needs Herdr App 0.1.8 or newer, the first version that shows programs.json entries in the + menu.
 
 ## Done when
