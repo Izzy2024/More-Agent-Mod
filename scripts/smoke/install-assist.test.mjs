@@ -62,7 +62,7 @@ console.log("ok 2: formatDetected truncates");
 // 3. The one rule: every shipped install string passes; shell tricks do not.
 {
   const shipped = CATALOG.filter((a) => a.install !== undefined).map((a) => a.install);
-  assert.equal(shipped.length, 13, "the verified catalog entries with an install");
+  assert.equal(shipped.length, 19, "the verified catalog entries with an install");
   for (const command of shipped) assert.ok(isRunnableInstall(command), `shipped: ${command}`);
 
   for (const command of [

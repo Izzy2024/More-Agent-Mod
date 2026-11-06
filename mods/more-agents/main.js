@@ -1400,7 +1400,7 @@ export default class MoreAgents extends View {
     return h_flex().id(`row-${a.id}`).px(8).py(5).gap(10).items_center().rounded(8)
       .border_1().border_color(focused ? t.accent : t.popover)
       .role("list_box_option").aria_selected(sel)
-      .accessibility_label(`${a.name} · ${a.run.join(" ")}${state ? ` · ${state}` : ""} · ${where}`)
+      .accessibility_label(`${a.name}${a.tier === "community" ? ` · ${copy.community}` : ""} · ${a.run.join(" ")}${state ? ` · ${state}` : ""} · ${where}`)
       // Rows are reachable with the arrow keys and Space/Enter, but they are not
       // Tab stops: Tab continues at continue, Shift+Tab returns to search.
       .when(offer, (el) => el.cursor_pointer().tab_stop(false)
@@ -1415,6 +1415,8 @@ export default class MoreAgents extends View {
       .child(v_flex().flex_1().min_w(0).gap(1)
         .child(h_flex().gap(6).items_center().min_w(0)
           .child(div().min_w(0).text_size(13).text_color(builtin ? t.dim : t.foreground).truncate().child(a.name))
+          // lane-catalog2: community only, its own child, so the state text stays as it is.
+          .when(a.tier === "community", (el) => el.child(div().text_size(10.5).px(5).rounded(4).bg(t.raised).text_color(t.muted).flex_none().child(this.note(copy.community))))
           .when(Boolean(state), (el) => el.child(div().text_size(10.5).px(5).rounded(4).bg(t.raised).text_color(t.muted).flex_none().child(state))))
         // The command wraps on its own line so a long argv cannot push the row sideways.
         .child(div().w_full().min_w(0).text_size(11).text_color(t.dim).whitespace_normal().child(a.run.join(" ")))

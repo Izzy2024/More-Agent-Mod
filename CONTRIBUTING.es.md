@@ -17,6 +17,7 @@ El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y d
      "docs": "https://mi-agente.dev/docs",
      "icon": "icons/agent.svg",
      "status": "verified",
+     "tier": "official",
      "source": "https://mi-agente.dev/docs/cli",
      "checked": "2026-11-01",
      "note": "Opcional: algo que el usuario deba saber."
@@ -34,6 +35,7 @@ El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y d
    | `docs` | sí | URL https de la documentación. |
    | `icon` | sí | `icons/<nombre>.svg`, de los iconos que trae Herdr (`defaults/icons/` en herdr-app), o `mods/more-agents/icons/<nombre>.svg` para un icono propio del mod (licencia compatible). Si no hay uno del agente, usa `icons/agent.svg`. |
    | `status` | sí | `verified`: comando sacado de docs oficiales. `unverified`: se lista pero no se ofrece. `builtin`: Herdr ya lo trae con `run`. |
+   | `tier` | obligatorio en `verified` | `official` o `community`. `official` significa que lo publica la organización o la documentación del propio proveedor, y `community` significa un repositorio de terceros o personal, como dsh-tui. El validador rechaza un verified sin este campo y lo rechaza en cualquier otro status. |
    | `source` | sí | URL donde se comprueba `run` (y `continue`). |
    | `checked` | obligatorio en `verified` | Fecha (`YYYY-MM-DD`) de la última revisión de `source`. El validador rechaza un verified sin fecha real. |
    | `bridge` | no | `bridges/<id>` si el agente no reporta OSC 7501 y este repo trae adaptador. El validador comprueba que existe `bridges/<id>/install.mjs`. |
@@ -48,6 +50,7 @@ El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y d
    # con un clon de herdr-app al lado, también comprueba iconos y builtin:
    node scripts/validate-catalog.mjs --icons ../herdr-app/defaults/icons --builtin ../herdr-app/defaults/programs.json
    node scripts/smoke-test.mjs
+   node scripts/check-links.mjs --offline   # solo frescura; quita --offline para pedir cada URL de docs y source
    # o: npm run check
    ```
 

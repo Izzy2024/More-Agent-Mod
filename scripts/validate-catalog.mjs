@@ -27,8 +27,9 @@ if (!m) { console.error(`${file}: must be // comments followed by \`export defau
 let list;
 try { list = JSON.parse(m[1]); } catch (e) { console.error(`${file}: the body is not strict JSON: ${e.message}`); process.exit(1); }
 
-const KEYS = new Set(["id", "name", "run", "match", "continue", "install", "docs", "icon", "status", "source", "checked", "bridge", "nativeOsc", "note"]);
+const KEYS = new Set(["id", "name", "run", "match", "continue", "install", "docs", "icon", "status", "source", "checked", "bridge", "nativeOsc", "note", "tier"]);
 const STATUS = new Set(["verified", "unverified", "builtin"]);
+const TIER = new Set(["official", "community"]);
 const ID = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 const URL_RE = /^https:\/\/\S+$/;
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -70,6 +71,8 @@ for (const [i, e] of (Array.isArray(list) ? list : []).entries()) {
   if (typeof e.docs !== "string" || !URL_RE.test(e.docs)) err(at, "docs: URL https");
   if (typeof e.source !== "string" || !URL_RE.test(e.source)) err(at, "source: https URL the command comes from");
   if (!STATUS.has(e.status)) err(at, `status: ${[...STATUS].join(" | ")}`);
+  if (e.status === "verified" && !TIER.has(e.tier)) err(at, 'tier: verified entries need "official" or "community"');
+  else if (e.status !== "verified" && e.tier !== undefined) err(at, "tier: only verified entries may set it");
   if (e.status === "verified" && e.checked === undefined) err(at, "checked: verified entries need the date their source was reviewed");
   if (e.checked !== undefined && !isDate(e.checked)) err(at, 'checked: "YYYY-MM-DD"');
   if (typeof e.icon !== "string" || !(HERDR_ICON.test(e.icon) || MOD_ICON.test(e.icon))) {
