@@ -215,7 +215,7 @@ console.log("ok 6: custom form errors");
   await drain();
   assert.equal(m.confirm?.kind, "path-missing");
   assert.equal(m.msgLevel, "warning");
-  assert.match(m.msg, /^`ghost-cmd` no está en tu PATH, así que no aparecerá en el menú \+ hasta que exista\. ¿Añadirlo igualmente\?$/);
+  assert.match(m.msg, /^`ghost-cmd` no se encuentra en este equipo, así que no aparecerá en el menú \+ hasta que lo instales\. ¿Añadirlo igualmente\?$/);
   noEnglish(m, "path missing");
 
   m.resolveConfirm(false, cx);
@@ -227,14 +227,27 @@ console.log("ok 6: custom form errors");
   await drain();
   m.resolveConfirm(true, cx);
   await drain();
-  assert.equal(m.msgLevel, "warning", "the missing PATH keeps the warning");
+  assert.equal(m.msgLevel, "warning", "the missing command keeps the warning");
   assert.match(m.msg, /^Guardado ghost-agent en tu programs\.json\./);
-  assert.match(m.msg, /`ghost-cmd` no está en tu PATH/);
+  assert.match(m.msg, /`ghost-cmd` no se encuentra en este equipo/);
   assert.match(m.msg, /^.*Panel de agentes: si no informa OSC 7501, necesita un bridge de estado/);
   assert.deepEqual(read().programs["ghost-agent"].run, ["ghost-cmd"]);
   noEnglish(m, "add anyway");
 }
 console.log("ok 7: path-missing confirm");
+
+// 7b. lane-path: the badge words are Spanish, including the third state.
+{
+  const { m } = await boot({ programs: {}, onPath: "omp", lang: "es" });
+  m.foundAt = { kilo: "/Users/x/.local/bin/kilo" };
+  const text = painted(m);
+  assert.ok(text.includes("no instalado"), "a missing command says no instalado");
+  assert.ok(text.includes("instalado, pero Herdr no lo ve"), "foundAt is its own state");
+  assert.ok(text.includes("/Users/x/.local/bin/kilo"), "the found path is painted");
+  assert.ok(!text.includes("no está en este PATH"), "the old wording is gone");
+  noEnglish(m, "badges");
+}
+console.log("ok 7b: badge words");
 
 // 8. Overwrite question, keep, and the saved message.
 {

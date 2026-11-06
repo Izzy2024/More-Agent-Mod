@@ -15,6 +15,8 @@ import { LANGS, DEFAULT_LANG, copyFor } from "./copy.js";
 import { planBridge, runBridgePlan, repoRootFrom } from "./bridge-install.js"; // lane-bridge
 // lane-install: detected agents, the Install button's plan and the one install rule.
 import { detectedAgents, formatDetected, isRunnableInstall, planInstall } from "./install-assist.js";
+// lane-path: ask the login shell, the way Herdr's + menu starts a program.
+import { INSTALL_TOOLS, probeBinaries } from "./path-probe.js";
 
 const OWN = "more-agents.keys"; // key -> fingerprint of the entry this mod wrote
 const LANG = "more-agents.lang"; // lane-i18n: the only setting this dialog persists
@@ -129,23 +131,6 @@ function entries(a, withContinue) {
   return out;
 }
 
-export const RESOLVE_MARK = "more-agents-resolve-argv0";
-// Exact `command -v` only: one lookup, no per-file forks on PATH.
-const RESOLVE_SH = [
-  RESOLVE_MARK,
-  `if command -v "$1" >/dev/null 2>&1; then
-  printf 'EXACT\\n'
-else
-  printf 'MISSING\\n'
-fi`,
-].join("\n");
-
-function parseResolveOutput(stdout) {
-  const out = String(stdout ?? "").trim();
-  if (out === "EXACT") return { status: "exact" };
-  return { status: "missing" };
-}
-
 async function resolveArgv0Windows(binary, execFn) {
   const r = await execFn("where", [binary]).catch(() => ({ code: 1, stdout: "" }));
   if (r.code !== 0 || !String(r.stdout ?? "").trim()) return { status: "missing" };
@@ -156,12 +141,14 @@ async function resolveArgv0Windows(binary, execFn) {
   return bases.has(stem(binary)) ? { status: "exact" } : { status: "missing" };
 }
 
+// Resolves argv[0] the way the + menu will: through the login shell on POSIX
+// (lane-path), `where` on Windows. No case guessing: a typo stays missing.
 export async function resolveArgv0OnPath(binary, { exec: execFn, windows }) {
   if (!binary) return { status: "missing" };
   try {
     if (windows) return await resolveArgv0Windows(binary, execFn);
-    const r = await execFn("sh", ["-c", RESOLVE_SH, "sh", binary]);
-    return parseResolveOutput(r.stdout);
+    const probe = await probeBinaries([binary], { exec: execFn, windows: false });
+    return { status: probe.ok && probe.found.has(binary) ? "exact" : "missing" };
   } catch {
     return { status: "missing" };
   }
@@ -374,22 +361,19 @@ export default class MoreAgents extends View {
     this.errorArgs = null;
   }
 
-  // Which catalog binaries are installed? A single `sh -c` (or `where` on Windows),
-  // with the user's real PATH. knownAgents() only knows about entries that already have run.
+  // Which binaries does the + menu see? Herdr starts a program through the
+  // user's login shell, so the probe asks that same shell (path-probe.js); the
+  // install tools ride along in the same call for the install assist.
+  // knownAgents() only knows about entries that already have run.
   async detect() {
-    // Catalog + custom agents this mod added.
+    // Catalog + custom agents this mod added, plus the install tools.
     const custom = this.ours().map((k) => runOf(this.table?.programs?.[k])?.[0]).filter((b) => typeof b === "string" && b);
-    const bins = [...new Set([...CATALOG.filter((a) => a.status !== "unverified").map((a) => a.run[0]), ...custom])];
-    try {
-      if (WINDOWS) {
-        for (const b of bins) this.onPath[b] = (await exec("where", [b]).catch(() => ({ code: 1 }))).code === 0;
-      } else {
-        const r = await exec("sh", ["-c", 'for b in "$@"; do command -v "$b" >/dev/null 2>&1 && echo "$b"; done', "sh", ...bins]);
-        const found = new Set(r.stdout.split("\n").map((s) => s.trim()).filter(Boolean));
-        for (const b of bins) this.onPath[b] = found.has(b);
-      }
-    } catch { this.onPath = {}; /* shown as unknown, not as the previous answer */ }
-    // The interactive shell may have a different PATH (mise, nvm…): what Herdr already knows wins.
+    const bins = [...new Set([...CATALOG.filter((a) => a.status !== "unverified").map((a) => a.run[0]), ...custom, ...INSTALL_TOOLS])]
+      .filter((b) => typeof b === "string" && b);
+    const probe = await probeBinaries(bins, { exec, windows: WINDOWS });
+    if (probe.ok) for (const b of bins) this.onPath[b] = probe.found.has(b);
+    else this.onPath = {}; // shown as unknown, not as the previous answer
+    // What Herdr already knows wins over a probe that could not answer.
     try { for (const a of await knownAgents()) if (a.installed) this.onPath[a.run[0]] = true; } catch {}
   }
 
@@ -1349,7 +1333,9 @@ export default class MoreAgents extends View {
       .flex().items_center().justify_center().text_size(11).text_color(t.solid_foreground).child(on ? "✓" : "");
   }
 
-  // PATH is three states. `undefined` is "could not check", never "in the + menu".
+  // Installed is three states. `undefined` is "could not check", never "in the
+  // + menu". A binary Herdr cannot see but that lives in a usual folder (lane H
+  // fills `foundAt`) is "installed, but Herdr can't see it", not "not installed".
   rowFacts(a) {
     const c = this.copy ?? copyFor(DEFAULT_LANG);
     const hasRun = Boolean(runOf(this.table?.programs?.[a.id]));
@@ -1361,13 +1347,16 @@ export default class MoreAgents extends View {
     const builtin = a.status === "builtin";
     const offer = a.status === "verified" && !added && !yours;
     const inst = this.onPath[a.run?.[0]];
-    const pathBadge = inst === true ? c.installed : inst === false ? c.notFoundPath : c.couldNotCheck;
+    const foundAt = inst === false ? this.foundAt?.[a.run?.[0]] : null;
+    const pathBadge = inst === true ? c.installed : inst === false ? (foundAt ? c.installedNotSeen : c.notFoundPath) : c.couldNotCheck;
     const state = builtin ? c.shipsBuiltin
       : added ? (inst === true ? c.inPlusMenu : inst === false ? c.addedNotInstalled : c.couldNotCheck)
       : yours ? c.alreadyInFileShort
       : a.status === "unverified" ? c.unverified : "";
     const hint = a.install || a.docs || "";
-    const where = !builtin && inst === false && hint ? `${pathBadge} · ${hint}` : pathBadge;
+    // The found path says where it is; an install hint would only confuse there.
+    const where = foundAt ? `${pathBadge} · ${foundAt}`
+      : !builtin && inst === false && hint ? `${pathBadge} · ${hint}` : pathBadge;
     return { added, yours, builtin, offer, inst, pathBadge, state, where, contKey, contAdded, canAddContinue };
   }
 
