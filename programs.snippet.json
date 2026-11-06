@@ -10,7 +10,7 @@
       "run": ["omp"]
     },
     "command-code": {
-      "match": ["cmd", "cmdc", "command-code"],
+      "match": ["cmdc", "command-code"],
       "run": ["command-code"]
     }
   }

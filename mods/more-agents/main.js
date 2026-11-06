@@ -9,6 +9,7 @@ import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { appHome, home, exec, readTextFile, writeTextFile, knownAgents, theme, props, closeOverlay, notify, shared, setShared } from "herdr";
 import CATALOG from "./catalog.js";
+import { scan } from "./repair.js"; // lane-repair
 
 const OWN = "more-agents.keys"; // key -> fingerprint of the entry this mod wrote
 const KEY_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
@@ -504,6 +505,42 @@ export default class MoreAgents extends View {
       return { ...p.result, warning: warnings.join(" ") };
     }
     return null;
+  }
+
+  // lane-repair: read-only proposals for entries that no longer match the catalog.
+  // Nothing is written here; a broken file yields no proposals at all.
+  scanRepairs() {
+    if (this.error || !this.table?.programs) return [];
+    try {
+      return scan(this.table.programs, CATALOG, Object.keys(this.own()));
+    } catch {
+      return []; // a diagnostic must never break the dialog
+    }
+  }
+
+  // lane-repair: applies ONE proposal after the existing confirm. The write still
+  // goes through edit() (via writeEntry/remove), so CAS and backups are unchanged.
+  askRepair(proposal, cx) {
+    if (!proposal || this.busy) return false;
+    if (proposal.kind === "update") {
+      this.confirm = { kind: "overwrite", key: proposal.key, entry: proposal.entry, where: "the catalog" };
+      this.say("warning", `"${proposal.key}" does not match the catalog: overwrite it or keep it as is?`);
+      this.moveFocus("confirm-keep", cx);
+      cx?.notify?.();
+      return true;
+    }
+    if (proposal.kind !== "remove") return false;
+    // The rule stands: this mod does not delete an entry it did not write.
+    if (!proposal.owned || !Object.prototype.hasOwnProperty.call(this.own(), proposal.key)) {
+      this.say("warning", `Not removing ${proposal.key}: this mod did not write that entry. Remove it by hand if it is a typo.`);
+      cx?.notify?.();
+      return false;
+    }
+    this.confirm = { kind: "remove", keys: [proposal.key], changed: [proposal.key] };
+    this.say("warning", `Remove the typo ${proposal.key} and keep ${proposal.neighbor}?`);
+    this.moveFocus("confirm-keep", cx);
+    cx?.notify?.();
+    return true;
   }
 
   // Adds without overwriting: if your programs.json already has that key with run, it's left as is;
@@ -1032,6 +1069,15 @@ export default class MoreAgents extends View {
           .child(div().text_size(12).font_semibold().text_color(t.blocked).child(this.note(this.errorHeading())))
           .child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(this.note(this.error))))
         .child(this.button("reload", "Reload", (cx) => this.reload(cx), t))))
+      // LANE-REPAIR-BANNER
+      .when(this.scanRepairs().length > 0, (el) => {
+        const repairs = this.scanRepairs();
+        return el.child(v_flex().id("repairs").flex_none().max_h(96).overflow_y_scrollbar().gap(4).p(8).rounded(6).bg(t.raised)
+          .child(div().text_size(11.5).font_semibold().text_color(t.muted).child(this.note("Repairs for programs.json (nothing is written until you confirm)")))
+          .children(repairs.map((p) => h_flex().gap(8).items_center()
+            .child(div().flex_1().min_w(0).text_size(11).text_color(p.kind === "warn" ? t.muted : p.kind === "remove" ? t.blocked : t.foreground).whitespace_normal().child(this.note(p.message)))
+            .when(p.kind !== "warn", (row) => row.child(this.button(`repair-${p.key}`, p.kind === "remove" ? "Remove typo" : "Repair", (cx) => this.askRepair(p, cx), t, p.kind === "update"))))));
+      })
       .child(v_flex().id("catalog").role("list_box").accessibility_label("Agents").flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
         .children(list.map((a) => this.row(a, t)))
         .children(custom.map((k) => {
