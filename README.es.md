@@ -7,6 +7,7 @@ Añade al menú + de Herdr App agentes que no vienen listos. Los eliges de un **
 - tras un guardado correcto guarda la versión anterior en `programs.json.more-agents.bak`; el backup es best-effort, así que un fallo se avisa sin bloquear la escritura;
 - nunca pisa una entrada tuya que ya tenga `run`;
 - si el archivo cambió entre medias lo relee y reintenta una vez; un segundo conflicto no escribe nada;
+- si el comando de una entrada se desvió del catálogo (`cmd` en vez de `command-code`) o una clave propia es un typo a una edición, el diálogo propone la reparación y solo escribe si confirmas;
 - la primera escritura guarda además el archivo tal como estaba antes de que el mod lo tocara en `programs.json.more-agents.orig.bak` (no se reemplaza nunca).
 
 ## Instalar

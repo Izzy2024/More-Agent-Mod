@@ -309,4 +309,19 @@ for (const args of [["empryo", "idle"], ["cursor", "working"], ["command-code", 
   assert.ok(trustBeforeBad.equals(fs.readFileSync(trustPath)), "invalid settings leaves trust untouched");
 }
 
+// --dry-run prints the target and must not create the hook file.
+{
+  const dryHome = fs.mkdtempSync(join(os.tmpdir(), "ma-bridges-dry-"));
+  for (const [script, file, needle] of [
+    [EMPRYO, join(dryHome, ".empryo", "hooks.json"), /empryo-bridge: dry run/],
+    [CURSOR, join(dryHome, ".cursor", "hooks.json"), /cursor-bridge: dry run/],
+    [COMMAND_CODE, join(dryHome, ".commandcode", "settings.json"), /command-code-bridge: dry run/],
+  ]) {
+    const result = runIn(dryHome, script, ["--dry-run"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, needle);
+    assert.equal(fs.existsSync(file), false, `${file} must not be created`);
+  }
+}
+
 console.log("bridges.test: emitter + empryo, cursor, command-code adapters OK");

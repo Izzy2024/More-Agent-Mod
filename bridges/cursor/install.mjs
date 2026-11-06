@@ -3,7 +3,7 @@
 // Maps Cursor hook events to bridges/lib/herdr-osc.sh with app=cursor.
 // Does not write OSC 7501 itself. The More agents mod never runs this file.
 //
-// Usage: node bridges/cursor/install.mjs [--uninstall]
+// Usage: node bridges/cursor/install.mjs [--uninstall | --dry-run]
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -30,7 +30,7 @@ const fail = (msg) => {
   process.exit(1);
 };
 
-const usage = () => console.log(`Usage: node bridges/cursor/install.mjs [--uninstall]
+const usage = () => console.log(`Usage: node bridges/cursor/install.mjs [--uninstall | --dry-run]
 
 Merge Herdr OSC 7501 command hooks into ~/.cursor/hooks.json,
 or remove only this adapter's hooks: herdr-osc.sh with app ${APP}, and the
@@ -39,6 +39,11 @@ The More agents mod never runs this.`);
 
 if (args.includes("--help") || args.includes("-h")) {
   usage();
+  process.exit(0);
+}
+// Prints the file a real run would touch and writes nothing.
+if (args.length === 1 && args[0] === "--dry-run") {
+  console.log(`cursor-bridge: dry run. Would edit ${hooksPath}. Writes nothing.`);
   process.exit(0);
 }
 if (args.length > 1 || (args.length === 1 && args[0] !== "--uninstall")) {

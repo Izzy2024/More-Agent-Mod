@@ -7,6 +7,7 @@ Adds, to the Herdr App + menu, agents that do not come ready to use. You pick th
 - after a successful write it saves the previous version to `programs.json.more-agents.bak`; the backup is best-effort, so a failure is reported without blocking the write;
 - it never overwrites an entry of yours that already has `run`;
 - if the file changed in the meantime it re-reads it and retries once; a second conflict writes nothing;
+- if an entry's command drifted from the catalog (`cmd` instead of `command-code`) or an owned key is a one-edit typo, the dialog proposes a repair and writes only after you confirm;
 - the first write also saves the file as it was before the mod touched it to `programs.json.more-agents.orig.bak` (never replaced).
 
 ## Install

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The dialog lists repairs for a catalog command that drifted (`command-code` still launching `cmd`) and for an owned one-edit typo (`empryro-agent` next to `empryo-agent`). Nothing is written until you confirm. A builtin entry whose `match` contains the token `agent` is only warned about.
+- `programs.snippet.json` no longer matches `cmd`.
+- Catalog adds `dsh-tui` (OSC 7501 itself, so no bridge note). The list has a search box. "Add continue" is a Tab stop. The header can switch the chrome to Spanish; English stays the default. A checked agent hidden by the search is not added.
+- A catalog row with a `bridge` can run that bridge's installer as `--dry-run` after a confirm. The three installers print the file they would edit and write nothing.
+
 ## 0.1.0
 
 First released version of the mod.

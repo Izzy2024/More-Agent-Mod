@@ -7,7 +7,7 @@
 // execs the shared emitter with working, or blocked for a user question.
 // That dispatcher is not a second emitter.
 //
-// Usage: node bridges/command-code/install.mjs [--uninstall]
+// Usage: node bridges/command-code/install.mjs [--uninstall | --dry-run]
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -38,7 +38,7 @@ const fail = (msg) => {
   process.exit(1);
 };
 
-const usage = () => console.log(`Usage: node bridges/command-code/install.mjs [--uninstall]
+const usage = () => console.log(`Usage: node bridges/command-code/install.mjs [--uninstall | --dry-run]
 
 Merge Herdr OSC 7501 command hooks into ~/.commandcode/settings.json,
 trust those commands in ~/.commandcode/trusted-hooks.json,
@@ -48,6 +48,11 @@ Other hooks stay. The More agents mod never runs this.`);
 
 if (args.includes("--help") || args.includes("-h")) {
   usage();
+  process.exit(0);
+}
+// Prints the files a real run would touch and writes nothing.
+if (args.length === 1 && args[0] === "--dry-run") {
+  console.log(`command-code-bridge: dry run. Would edit ${settingsPath} and ${trustPath}. Writes nothing.`);
   process.exit(0);
 }
 if (args.length > 1 || (args.length === 1 && args[0] !== "--uninstall")) {
