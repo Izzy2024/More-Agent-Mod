@@ -237,6 +237,12 @@ export default class MoreAgents extends View {
     };
     this.actionHandles = {};    // rm-<id>, rm-continue-<id>, add-continue-<id>
     this.confirm = null;        // pending question: { kind: "overwrite" | "remove", ... }
+    // LANE-BRIDGE: the last read-only --status per agent id, plus the runner and
+    // the root the dialog uses (tests pin them). Unknown stays absent, so the row
+    // keeps the plain dry-run button.
+    this.bridgeStatus = {};
+    this.bridgeExec = exec;
+    this.bridgeRoot = null;
     this.rootHandle = handle();
     this.rowHandles = {};
     if (typeof cx.focus_handle === "function") {
@@ -267,7 +273,7 @@ export default class MoreAgents extends View {
     // can land before the dialog exists.
     if (typeof cx.timer?.after === "function") cx.timer.after(600, () => this.inputs.search.focus());
     this.inputs.run.on("submit", (_e, cx) => this.addCustom(cx));
-    cx.spawn(async (cx) => { await this.load(); cx.notify(); await this.detect(); cx.notify(); });
+    cx.spawn(async (cx) => { await this.load(); cx.notify(); await this.detect(); cx.notify(); await this.checkBridges(); cx.notify(); });
   }
 
   async load() {
@@ -353,12 +359,14 @@ export default class MoreAgents extends View {
     return "programs.json";
   }
 
-  // Re-read and re-detect. Closing and reopening the dialog does not do this.
+  // Re-read, re-detect and re-check the bridges. Closing and reopening the
+  // dialog does not do this.
   reload(cx) {
     if (this.busy) return false;
     const task = async (cx) => {
       await this.load();
       await this.detect();
+      await this.checkBridges();
       cx?.notify?.();
     };
     if (typeof cx?.spawn === "function") {
@@ -685,24 +693,70 @@ export default class MoreAgents extends View {
     });
   }
 
-  // LANE-BRIDGE-PREVIEW: show the bridge installer plan; nothing runs before confirm.
+  // LANE-BRIDGE: the root this dialog can trust (a checkout or an installed copy).
+  bridgeRootNow() {
+    return this.bridgeRoot ?? (props().repoRoot || repoRootFrom(import.meta.url));
+  }
+
+  // Same read the rest of the dialog uses; no new filesystem access.
+  async bridgeFileExists(path) {
+    try { return (await readTextFile(path)) != null; } catch { return false; }
+  }
+
+  // LANE-BRIDGE: read-only --status for every catalog row with a bridge. Any
+  // failure leaves that row unknown: no status, so the button keeps the dry run.
+  async checkBridges() {
+    this.bridgeStatus = {};
+    if (WINDOWS || this.error) return;
+    const repoRoot = this.bridgeRootNow();
+    for (const a of CATALOG) {
+      if (typeof a.bridge !== "string") continue;
+      try {
+        const plan = await planBridge(a, { repoRoot, action: "status", fileExists: (path) => this.bridgeFileExists(path) });
+        if (!plan.ok) continue;
+        const r = await runBridgePlan(plan, { exec: this.bridgeExec });
+        if (r.ok && r.status) this.bridgeStatus[a.id] = r.status;
+      } catch {
+        // Unknown stays unknown; a probe never breaks the dialog.
+      }
+    }
+  }
+
+  // LANE-BRIDGE: what the row's button says, from the last --status.
+  bridgeLabel(a) {
+    const c = this.copy ?? copyFor(DEFAULT_LANG);
+    const st = this.bridgeStatus?.[a.id];
+    return st ? (st.installed ? c.bridgeRemove : c.bridgeInstall) : c.bridge;
+  }
+
+  // LANE-BRIDGE-PREVIEW: a known status runs the read-only dry run on the click
+  // and offers install or remove in the confirm; unknown keeps the plain dry run.
   previewBridge(a, cx) {
-    if (this.busy) return false;
+    if (this.busy || WINDOWS) return false;
     this.confirm = null;
     cx.spawn(async (cx) => {
       try {
-        const plan = await planBridge(a, {
-          // A checkout can be named when the mod was copied into the app home.
-          repoRoot: props().repoRoot || repoRootFrom(import.meta.url),
-          dryRun: true,
-          // Same read the rest of the dialog uses; no new filesystem access.
-          fileExists: async (path) => {
-            try { return (await readTextFile(path)) != null; } catch { return false; }
-          },
-        });
+        const repoRoot = this.bridgeRootNow();
+        const fileExists = (path) => this.bridgeFileExists(path);
+        const plan = await planBridge(a, { repoRoot, action: "preview", fileExists });
         if (!plan.ok) { this.say("error", plan.error); return; }
-        this.confirm = { kind: "bridge", agentId: a.id, plan };
-        this.say("info", plan.summary);
+        const status = this.bridgeStatus[a.id] ?? null;
+        const action = status ? (status.installed ? "uninstall" : "install") : null;
+        let runPlan = null;
+        let summary = plan.summary;
+        if (action) {
+          runPlan = await planBridge(a, { repoRoot, action, fileExists });
+          if (!runPlan.ok) { this.say("error", runPlan.error); return; }
+          // The click only runs --dry-run; the real action needs the confirm.
+          const dry = await runBridgePlan(plan, { exec: this.bridgeExec });
+          if (!dry.ok) { this.say("error", dry.error); return; }
+          summary = dry.text;
+        }
+        const copy = this.copy ?? copyFor(DEFAULT_LANG);
+        const file = status?.file ?? plan.script;
+        const command = (runPlan ?? plan).argv.join(" ");
+        this.confirm = { kind: "bridge", agentId: a.id, plan, runPlan, action };
+        this.say("info", copy.bridgePrompt(action ?? "preview", a.name, file, command, summary));
         this.moveFocus("confirm-keep", cx);
       } catch (e) {
         this.say("error", `Could not prepare the bridge install: ${errText(e)}. Nothing was run.`);
@@ -900,15 +954,20 @@ export default class MoreAgents extends View {
       cx.notify();
       return;
     }
-    // LANE-BRIDGE-CONFIRM: a bridge plan runs its own dry-run argv only.
+    // LANE-BRIDGE-CONFIRM: only this button runs the real action; then the row's
+    // status is read again. An unknown status still only runs the dry run.
     if (c.kind === "bridge") {
       this.moveFocus("add-selected", cx); // the confirm buttons are gone
       if (!overwrite) { this.say("info", "Cancelled."); cx.notify(); return; }
       this.busy = true;
       cx.spawn(async (cx) => {
         try {
-          const r = await runBridgePlan(c.plan, { exec });
-          if (r.ok) this.say("info", r.text); else this.say("error", r.error);
+          const r = await runBridgePlan(c.runPlan ?? c.plan, { exec: this.bridgeExec });
+          if (c.runPlan) await this.checkBridges();
+          if (r.ok) this.say(c.runPlan ? "success" : "info", r.text);
+          else this.say("error", r.error);
+        } catch (e) {
+          this.say("error", `Could not run the bridge installer: ${errText(e)}. Nothing was run.`);
         } finally {
           this.busy = false;
           cx.notify();
@@ -1248,9 +1307,15 @@ export default class MoreAgents extends View {
     if (added) actions.push(this.button(`rm-${a.id}`, "Remove", (cx) => this.remove([a.id], cx), t));
     if (contAdded) actions.push(this.button(`rm-continue-${a.id}`, "Remove continue", (cx) => this.remove([contKey], cx), t));
     if (canAddContinue) actions.push(this.button(`add-continue-${a.id}`, "Add continue", (cx) => this.addContinue(a, cx), t));
-    // LANE-BRIDGE-BUTTON: pointer-only, so the keyboard order stays short.
-    if (typeof a.bridge === "string" && a.bridge.startsWith("bridges/")) {
-      actions.push(this.button(`bridge-${a.id}`, "Bridge", (cx) => this.previewBridge(a, cx), t));
+    // LANE-BRIDGE-BUTTON: pointer-only, state-aware, and never on Windows (no
+    // `sh`/`ps` there). A known status also paints its one-word label.
+    if (!WINDOWS && typeof a.bridge === "string" && a.bridge.startsWith("bridges/")) {
+      const st = this.bridgeStatus[a.id];
+      if (st) {
+        actions.push(div().flex_none().text_size(10.5).text_color(st.installed ? t.done : t.muted)
+          .child(st.installed ? copy.bridgeInstalled : copy.bridgeNotInstalled));
+      }
+      actions.push(this.button(`bridge-${a.id}`, this.bridgeLabel(a), (cx) => this.previewBridge(a, cx), t));
     }
     // LANE-INSTALL: pointer-only too, and never on Windows (no `sh`).
     if (!WINDOWS && a.status === "verified" && inst === false && isRunnableInstall(a.install)) {
@@ -1431,7 +1496,9 @@ export default class MoreAgents extends View {
           .child(this.button("confirm-yes",
             this.confirm.kind === "remove" ? c.removeAnyway
               : this.confirm.kind === "path-missing" ? c.addAnyway
-                : this.confirm.kind === "bridge" ? c.dryRun
+                : this.confirm.kind === "bridge"
+                  ? (this.confirm.action === "install" ? c.bridgeInstall
+                    : this.confirm.action === "uninstall" ? c.bridgeRemove : c.dryRun)
                   : this.confirm.kind === "install" ? c.install
                     : c.overwrite, (cx) => this.resolveConfirm(true, cx), t, true))
           .child(this.button("confirm-keep",

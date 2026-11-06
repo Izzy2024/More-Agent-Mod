@@ -42,6 +42,16 @@ const EN = {
   dryRun: "Run dry run",
   bridgeCatalog: (name, bridge, docs) => `Agents panel: ${name} needs the status bridge ${bridge} — see ${docs}.`,
   bridgeCustom: (docs) => `Agents panel: if it does not report OSC 7501, it needs a status bridge — see ${docs}.`,
+  // lane-bridge
+  bridge: "Bridge",
+  bridgeInstall: "Install bridge",
+  bridgeRemove: "Remove bridge",
+  bridgeInstalled: "installed",
+  bridgeNotInstalled: "not installed",
+  bridgePrompt: (action, name, file, command, summary) => {
+    const verb = action === "install" ? "Install" : action === "uninstall" ? "Remove" : "Dry run";
+    return `${verb} the ${name} status bridge? Hook file: ${file}. Command: ${command}. ${summary}`;
+  },
   // lane-install
   install: "Install",
   installConfirm: (name, command) => `Install ${name}? This runs in a new tab: ${command}`,
@@ -82,6 +92,18 @@ const ES = {
   dryRun: "Probar sin escribir",
   bridgeCatalog: (name, bridge, docs) => `Panel de agentes: ${name} necesita el bridge de estado ${bridge} — ver ${docs}.`,
   bridgeCustom: (docs) => `Panel de agentes: si no informa OSC 7501, necesita un bridge de estado — ver ${docs}.`,
+  // lane-bridge
+  bridge: "Bridge",
+  bridgeInstall: "Instalar bridge",
+  bridgeRemove: "Quitar bridge",
+  bridgeInstalled: "instalado",
+  bridgeNotInstalled: "no instalado",
+  bridgePrompt: (action, name, file, command, summary) => {
+    const title = action === "install" ? `¿Instalar el bridge de estado de ${name}?`
+      : action === "uninstall" ? `¿Quitar el bridge de estado de ${name}?`
+        : `¿Probar sin escribir el bridge de estado de ${name}?`;
+    return `${title} Archivo de hooks: ${file}. Comando: ${command}. ${summary}`;
+  },
   // lane-install
   install: "Instalar",
   installConfirm: (name, command) => `¿Instalar ${name}? Se ejecuta en una pestaña nueva: ${command}`,
