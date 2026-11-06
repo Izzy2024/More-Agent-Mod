@@ -30,10 +30,11 @@ const tab = (shift = false) => m.formKey({ key: "tab", modifiers: { shift } }, k
 // 1. Focus starts in the key field, so the dialog is usable without a mouse.
 assert.equal(m.focusedField, "key", "initial focus on key");
 
-// Full, non-wrapping Tab order: key → name → run → continue → Add → Add custom → Close.
+// Full, non-wrapping Tab order: key → name → run → continue → Add → Add custom →
+// Add continue (aider is in the file) → Close.
 const forward = [];
-for (let i = 0; i < 6; i++) { tab(); forward.push(m.focusedField); }
-assert.deepEqual(forward, ["name", "run", "continue", "add-selected", "add-custom", "close"]);
+for (let i = 0; i < 7; i++) { tab(); forward.push(m.focusedField); }
+assert.deepEqual(forward, ["name", "run", "continue", "add-selected", "add-custom", "add-continue-aider", "close"]);
 let before = stopped;
 tab();
 assert.equal(m.focusedField, "close", "Tab at the end does not wrap");
@@ -41,8 +42,8 @@ assert.equal(stopped, before, "Tab at the end leaves the form (no stop_propagati
 
 // Shift+Tab is the exact inverse, and also does not wrap at the start.
 const backward = [];
-for (let i = 0; i < 6; i++) { tab(true); backward.push(m.focusedField); }
-assert.deepEqual(backward, ["add-custom", "add-selected", "continue", "run", "name", "key"]);
+for (let i = 0; i < 7; i++) { tab(true); backward.push(m.focusedField); }
+assert.deepEqual(backward, ["add-continue-aider", "add-custom", "add-selected", "continue", "run", "name", "key"]);
 before = stopped;
 tab(true);
 assert.equal(m.focusedField, "key", "Shift+Tab at the start does not wrap");

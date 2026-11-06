@@ -6,6 +6,9 @@
 //         "unverified" (not offered for adding) or
 //         "builtin" (Herdr already ships it in its + menu; informational only).
 // checked: "YYYY-MM-DD" of the last review of `source`; required for verified.
+// nativeOsc: true when the agent reports its program status over OSC 7501 by
+//            itself, so it needs no bridge from this repo and the dialog must
+//            not suggest one. Never together with "bridge".
 export default [
   {
     "id": "omp",
@@ -26,6 +29,7 @@ export default [
     "status": "verified",
     "source": "https://omp.sh/docs/quickstart",
     "checked": "2026-11-01",
+    "nativeOsc": true,
     "note": "Fork of Pi; reuses the Pi icon."
   },
   {
@@ -50,6 +54,24 @@ export default [
     "checked": "2026-11-01",
     "bridge": "bridges/command-code",
     "note": "Herdr already ships a name and icon, but no run. On Windows the short alias is `cmdc`: `cmd` is the system shell."
+  },
+  {
+    "id": "dsh-tui",
+    "name": "dsh-TUI",
+    "run": [
+      "dsh-tui"
+    ],
+    "match": [
+      "dsh-tui"
+    ],
+    "install": "npm install -g @deepseek-ai/dsh @deepseek-harness-tui/dsh-tui",
+    "docs": "https://github.com/ccch1mneyyy/dsh-TUI#readme",
+    "icon": "icons/agent.svg",
+    "status": "verified",
+    "source": "https://github.com/ccch1mneyyy/dsh-TUI/blob/main/README.md",
+    "checked": "2026-11-06",
+    "nativeOsc": true,
+    "note": "Terminal UI for DeepSeek Harness; `dst` is a short alias for the same program. It reports OSC 7501 itself (DSH_TUI_PROGRAM_STATUS=0 turns it off), so it needs no status bridge. `dsh-tui --resume` reopens the last session, but no continue variant is offered here yet."
   },
   {
     "id": "kilo",

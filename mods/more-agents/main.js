@@ -9,6 +9,8 @@ import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { appHome, home, exec, readTextFile, writeTextFile, knownAgents, theme, props, closeOverlay, notify, shared, setShared } from "herdr";
 import CATALOG from "./catalog.js";
+// lane-catalog: dialog copy. English is the default; see copy.js.
+import { LANGS, DEFAULT_LANG, copyFor } from "./copy.js";
 
 const OWN = "more-agents.keys"; // key -> fingerprint of the entry this mod wrote
 const KEY_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
@@ -200,6 +202,9 @@ export default class MoreAgents extends View {
       key: InputState.new({ placeholder: "key, e.g. my-agent" }),
       name: InputState.new({ placeholder: "display name" }),
       run: InputState.new({ placeholder: "command, e.g. my-agent --flag" }),
+      // LANE-CATALOG-INIT: the list's filter box. Its placeholder is set once,
+      // in the language the dialog starts in.
+      search: InputState.new({ placeholder: copyFor(DEFAULT_LANG).search }),
     };
     // Herdr doesn't move focus with Tab inside a mod dialog (its window doesn't
     // register gpui-shell's Tab action), so the dialog does it itself with the
@@ -238,6 +243,15 @@ export default class MoreAgents extends View {
     // can land before the dialog exists.
     if (typeof cx.timer?.after === "function") cx.timer.after(600, () => this.inputs.key.focus());
     this.inputs.run.on("submit", (_e, cx) => this.addCustom(cx));
+    // LANE-CATALOG-INIT: English by default (the strings the smoke tests pin);
+    // the header switch only changes the copy, nothing is persisted. The search
+    // box notifies so the list repaints as you type; it is not a Tab stop, so
+    // the order above stays exactly as it is.
+    this.lang = DEFAULT_LANG;
+    this.copy = copyFor(this.lang);
+    this.inputs.search.on("focus", () => { this.focusedField = "search"; });
+    this.inputs.search.on("blur", () => { if (this.focusedField === "search") this.focusedField = null; });
+    this.inputs.search.on("change", (_e, cx) => cx?.notify?.());
     cx.spawn(async (cx) => { await this.load(); cx.notify(); await this.detect(); cx.notify(); });
   }
 
@@ -537,9 +551,12 @@ export default class MoreAgents extends View {
           if (r.changed.length) {
             await this.detect(); // the message depends on whether the command is installed
             const added = this.addedMessage(r.changed);
-            // A catalog row that needs an OSC 7501 bridge says so, with the repo path.
-            const bridged = [...new Set(r.changed.map((k) => this.agentOf(k)).filter((a) => a?.bridge))];
-            const bridgeNotes = bridged.map((a) => `Agents panel: ${a.name} needs the status bridge ${a.bridge} — see ${BRIDGES_DOCS}.`);
+            // A catalog row that needs an OSC 7501 bridge says so, with the repo
+            // path. LANE-CATALOG: an agent that reports OSC 7501 itself
+            // (nativeOsc) is not told to install a bridge.
+            const bridged = [...new Set(r.changed.map((k) => this.agentOf(k)).filter((a) => a && a.bridge && !a.nativeOsc))];
+            const copy = this.copy ?? copyFor(DEFAULT_LANG);
+            const bridgeNotes = bridged.map((a) => copy.bridgeCatalog(a.name, a.bridge, BRIDGES_DOCS));
             this.msg = [
               added.text,
               ...bridgeNotes,
@@ -716,17 +733,22 @@ export default class MoreAgents extends View {
     });
     if (r) {
       await this.detect();
+      const copy = this.copy ?? copyFor(DEFAULT_LANG);
+      // LANE-CATALOG: an agent whose catalog entry declares that it reports
+      // OSC 7501 by itself needs no bridge, so the dialog stays quiet about it.
+      const bridge = this.agentOf(key)?.nativeOsc ? null : copy.bridgeCustom(BRIDGES_DOCS);
       const saved = [
         `Saved ${key} in your programs.json.`,
         note,
         r.warning,
-        `Agents panel: if it does not report OSC 7501, it needs a status bridge — see ${BRIDGES_DOCS}.`,
+        bridge,
       ].filter(Boolean).join(" ");
       const level = (note || r.warning) ? "warning" : "success";
       this.say(level, saved);
       this.ensureActionHandles(this.actionIds());
       notify({ title: "More agents", body: `Saved ${key}.`, level: level === "warning" ? "info" : "success" });
-      for (const i of Object.values(this.inputs)) i.set_value("");
+      // The filter box is not part of the form, so a save must not clear it.
+      for (const [id, input] of Object.entries(this.inputs)) if (id !== "search") input.set_value("");
       this.invalidField = null;
     }
   }
@@ -791,7 +813,9 @@ export default class MoreAgents extends View {
 
   // Verified agents that can still be added, in the list's order.
   offeredIds() {
-    return CATALOG.filter((a) => a.status === "verified" && !runOf(this.table?.programs?.[a.id])).map((a) => a.id);
+    // LANE-CATALOG-SEARCH: only the rows the filter left on screen are arrow
+    // stops. render() fills visibleIds; before the first paint nothing is hidden.
+    return CATALOG.filter((a) => a.status === "verified" && !runOf(this.table?.programs?.[a.id]) && (this.visibleIds?.has(a.id) ?? true)).map((a) => a.id);
   }
 
   // Row actions in render order. Remove buttons are Tab stops; Add continue
@@ -838,10 +862,11 @@ export default class MoreAgents extends View {
   }
 
   // Remove buttons follow Add custom; the overwrite/remove question adds two
-  // stops before Close while it is open. Add continue is not a Tab stop, and
-  // Reload is one only while the file is broken.
+  // stops before Close while it is open. Reload is one only while the file is
+  // broken. LANE-CATALOG: "Add continue" is a Tab stop too, so the keyboard
+  // reaches it without a pointer; the rest of the order is unchanged.
   tabOrder() {
-    const actions = this.actionIds().filter((id) => !id.startsWith("add-continue-"));
+    const actions = this.actionIds();
     this.ensureActionHandles(actions);
     const base = [...this.order.slice(0, -1), ...actions];
     if (this.error) base.push("reload");
@@ -1005,10 +1030,25 @@ export default class MoreAgents extends View {
 
   render() {
     const t = theme();
+    const c = this.copy ?? copyFor(DEFAULT_LANG);
     const known = new Set(CATALOG.map((a) => a.id));
     const custom = this.ours().filter((k) => !known.has(k) && !k.endsWith("-continue") && this.table?.programs?.[k]);
     const order = { verified: 0, unverified: 1, builtin: 2 };
     const list = [...CATALOG].sort((x, y) => order[x.status] - order[y.status] || x.name.localeCompare(y.name));
+    // LANE-CATALOG-SEARCH: one matcher for catalog rows and custom entries; it
+    // looks at the name, the key and the command. Only the matches are painted.
+    const q = this.inputs.search.value().trim().toLowerCase();
+    const hit = (a) => !q || `${a.id} ${a.name} ${(runOf(a) ?? []).join(" ")}`.toLowerCase().includes(q);
+    const customRows = custom.map((k) => {
+      const e = this.table?.programs?.[k] ?? {};
+      return { id: k, name: e.name ?? k, run: runOf(e) ?? [k], status: "custom", docs: "" };
+    });
+    const visible = list.filter(hit);
+    const visibleCustom = customRows.filter(hit);
+    const noMatch = Boolean(q) && !visible.length && !visibleCustom.length;
+    // The arrow keys follow the filter: this is the only place that knows which
+    // rows are on screen.
+    this.visibleIds = new Set([...visible, ...visibleCustom].map((a) => a.id));
     const border = (k) => (this.invalidField === k ? t.blocked : this.focusedField === k ? t.accent : t.input);
     const field = (k) => Input.new(this.inputs[k]).h(30).px(8).rounded(6).border_1().border_color(border(k)).bg(t.background).text_size(12).text_color(t.foreground);
     const labeled = (k, label) => v_flex().gap(3).flex_1().min_w(0)
@@ -1020,61 +1060,72 @@ export default class MoreAgents extends View {
     this.shown = [];
     const status = this.busy || Boolean(this.confirm) || Boolean(this.msg);
     return v_flex().size_full().bg(t.popover).p(14).gap(8).text_size(13)
-      .id("more-agents").track_focus(this.rootHandle).role("dialog").accessibility_label("More agents for the + menu")
+      .id("more-agents").track_focus(this.rootHandle).role("dialog").accessibility_label(c.title)
       // Keys travel the focus path, so one handler here covers inputs and controls.
       .on_key_down((e, cx) => this.keyDown(e, cx))
       .child(h_flex().justify_between().items_center()
-        .child(div().text_size(14).font_semibold().text_color(t.foreground).child("More agents for the + menu"))
-        .child(this.button("close", "Close", () => closeOverlay(props().overlay), t)))
-      .child(div().text_size(11.5).text_color(t.muted).child(`Writes to ${this.path}; after a successful save the previous version goes to programs.json.more-agents.bak (best-effort: a backup failure is reported, not blocking the write). Herdr reloads it by itself.`))
+        .child(div().text_size(14).font_semibold().text_color(t.foreground).child(c.title))
+        .child(h_flex().gap(8).items_center()
+          // LANE-CATALOG-SEARCH: language switch. Pointer-only on purpose: the
+          // dialog's Tab order is part of its contract and stays as it was.
+          .children(LANGS.map((lang) => div().id(`lang-${lang}`).px(5).py(1).rounded(4).cursor_pointer()
+            .text_size(10.5).text_color(lang === this.lang ? t.foreground : t.muted)
+            .bg(lang === this.lang ? t.raised : t.popover)
+            .role("button").accessibility_label(lang === "en" ? "English" : "Español")
+            .on_click((_e, cx) => { this.lang = lang; this.copy = copyFor(lang); cx.notify(); })
+            .child(lang.toUpperCase())))
+          .child(this.button("close", c.close, () => closeOverlay(props().overlay), t))))
+      .child(div().text_size(11.5).text_color(t.muted).child(c.writes(this.path)))
       .when(Boolean(this.error), (el) => el.child(h_flex().flex_none().max_h(72).overflow_y_scrollbar().gap(8).items_center().p(8).rounded(6).bg(t.raised)
         .child(v_flex().flex_1().min_w(0).gap(2)
           .child(div().text_size(12).font_semibold().text_color(t.blocked).child(this.note(this.errorHeading())))
           .child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(this.note(this.error))))
-        .child(this.button("reload", "Reload", (cx) => this.reload(cx), t))))
-      .child(v_flex().id("catalog").role("list_box").accessibility_label("Agents").flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
-        .children(list.map((a) => this.row(a, t)))
-        .children(custom.map((k) => {
-          const e = this.table?.programs?.[k] ?? {};
-          return this.row({ id: k, name: e.name ?? k, run: runOf(e) ?? [k], status: "custom", docs: "" }, t);
-        })))
+        .child(this.button("reload", c.reload, (cx) => this.reload(cx), t))))
+      // LANE-CATALOG-SEARCH: the filter box sits above the list and narrows it
+      // to the agents whose name, key or command matches.
+      .child(h_flex().gap(6).items_center().flex_none()
+        .child(div().flex_1().min_w(0).child(field("search"))))
+      .child(v_flex().id("catalog").role("list_box").accessibility_label(c.agents).flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
+        .when(noMatch, (el) => el.child(div().p(8).text_size(12).text_color(t.muted).child(this.note(c.searchNoMatch))))
+        .children(visible.map((a) => this.row(a, t)))
+        .children(visibleCustom.map((a) => this.row(a, t))))
       .child(h_flex().gap(8).items_center()
         .child(h_flex().id("continue").gap(6).items_center().cursor_pointer().px(4).py(2).rounded(4)
           .border_1().border_color(contFocused ? t.accent : t.popover)
-          .role("check_box").checked(this.withContinue).accessibility_label("Also add the \"continue\" variant (if it has one)")
+          .role("check_box").checked(this.withContinue).accessibility_label(c.continueLabel)
           .when(this.handles.continue, (el) => el.track_focus(this.handles.continue))
           .on_click((_e, cx) => { this.moveFocus("continue", cx); this.withContinue = !this.withContinue; cx.notify(); })
           .child(this.check(this.withContinue, t))
-          .child(div().text_size(12).text_color(t.foreground).child("Also add the \"continue\" variant (if it has one)")))
+          .child(div().text_size(12).text_color(t.foreground).child(c.continueLabel)))
         .child(div().flex_1())
-        .child(this.button("add-selected", n ? `Add ${n}` : "Add", (cx) => this.addSelected(cx), t, n > 0)))
+        .child(this.button("add-selected", c.add(n), (cx) => this.addSelected(cx), t, n > 0)))
       .child(div().h(1).bg(t.border))
-      .child(div().text_size(12).text_color(t.dim).child("Custom agent · Tab: fields and buttons · ↑/↓ then Space/Enter: agents · Enter in the command adds it"))
+      .child(div().text_size(12).text_color(t.dim).child(c.hint))
       .child(v_flex().id("custom-form").role("form").gap(6)
         .child(h_flex().gap(6).items_end()
-          .child(div().w(150).child(labeled("key", "Key")))
-          .child(div().flex_1().min_w(0).child(labeled("name", "Display name"))))
+          .child(div().w(150).child(labeled("key", c.key)))
+          .child(div().flex_1().min_w(0).child(labeled("name", c.name))))
         .child(h_flex().gap(6).items_end()
-          .child(div().flex_1().min_w(0).child(labeled("run", "Command")))
-          .child(this.button("add-custom", "Add", (cx) => this.addCustom(cx), t, true))))
+          .child(div().flex_1().min_w(0).child(labeled("run", c.command)))
+          .child(this.button("add-custom", c.add(0), (cx) => this.addCustom(cx), t, true))))
       // What the command field produces, as a list of arguments.
       .when(pv.argv.length > 0 || Boolean(pv.error), (el) => el.child(h_flex().gap(6).items_center().min_w(0)
-        .child(div().flex_none().text_size(11).text_color(t.muted).child("run:"))
+        .child(div().flex_none().text_size(11).text_color(t.muted).child(c.run))
         .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(pv.error ? t.blocked : t.dim).child(pv.error ?? JSON.stringify(pv.argv)))
-        .when(pv.missing, (e2) => e2.child(div().flex_none().text_size(11).text_color(t.blocked).child(`\`${pv.argv[0]}\` is not on your PATH`)))))
+        .when(pv.missing, (e2) => e2.child(div().flex_none().text_size(11).text_color(t.blocked).child(c.notOnPath(pv.argv[0]))))))
       // Capped and scrolled so a long error or install hint cannot push the list out of the 640×640 dialog.
       .when(status, (el) => el.child(v_flex().flex_none().max_h(72).overflow_y_scrollbar().gap(4)
-        .when(this.busy, (e2) => e2.child(div().text_size(11.5).text_color(t.muted).child(this.note("Saving…"))))
+        .when(this.busy, (e2) => e2.child(div().text_size(11.5).text_color(t.muted).child(this.note(c.saving))))
         .when(Boolean(this.confirm), (e2) => e2.child(h_flex().gap(8).items_center().p(8).rounded(6).bg(t.raised)
           .child(div().flex_1().min_w(0).text_size(11.5).text_color(this.msgTone(t)).whitespace_normal().child(this.msg))
           .child(this.button("confirm-yes",
-            this.confirm.kind === "remove" ? "Remove anyway"
-              : this.confirm.kind === "path-missing" ? "Add anyway"
-                : "Overwrite", (cx) => this.resolveConfirm(true, cx), t, true))
+            this.confirm.kind === "remove" ? c.removeAnyway
+              : this.confirm.kind === "path-missing" ? c.addAnyway
+                : c.overwrite, (cx) => this.resolveConfirm(true, cx), t, true))
           .child(this.button("confirm-keep",
-            this.confirm.kind === "remove" ? "Keep"
-              : this.confirm.kind === "path-missing" ? "Cancel"
-                : "Keep as is", (cx) => this.resolveConfirm(false, cx), t))))
+            this.confirm.kind === "remove" ? c.keep
+              : this.confirm.kind === "path-missing" ? c.cancel
+                : c.keepAsIs, (cx) => this.resolveConfirm(false, cx), t))))
         .when(Boolean(this.msg) && !this.confirm, (e2) => e2.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : this.msgTone(t)).whitespace_normal().child(this.msg)))));
   }
 }
