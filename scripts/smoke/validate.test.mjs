@@ -185,6 +185,10 @@ const target = join(appHome, "mods", "more-agents");
   assert.match(r.out, /Installed/);
   assert.ok(fs.existsSync(join(target, "mod.json")), "mod.json installed");
   assert.ok(fs.existsSync(join(target, "catalog.js")), "catalog installed");
+  assert.ok(fs.existsSync(join(target, "bridges", "lib", "herdr-osc.sh")), "bridges installed with the mod");
+  assert.ok(fs.existsSync(join(target, "bridges", "cursor", "install.mjs")), "the cursor bridge is installed");
+  assert.ok(!fs.existsSync(join(target, "gpui-kit.d.ts")), "generated typings are not installed");
+  assert.ok(!fs.existsSync(join(target, "jsconfig.json")), "editor config is not installed");
   assert.ok(!fs.existsSync(join(target, "more-agents")), "no nested mod folder");
   assert.ok(!fs.existsSync(join(appHome, "programs.json")), "programs.json untouched");
   assert.ok(!fs.existsSync(join(appHome, "keys.json")), "keys.json untouched");
@@ -200,6 +204,8 @@ console.log("ok 7: fresh install does not nest");
   const backup = join(appHome, "mods", "more-agents.bak");
   assert.ok(fs.existsSync(join(backup, "OLD")), "previous folder backed up");
   assert.ok(!fs.existsSync(join(target, "OLD")), "old file not in the new folder");
+  assert.ok(fs.existsSync(join(target, "bridges", "lib", "herdr-osc.sh")), "bridges survive an update");
+  assert.ok(!fs.existsSync(join(target, "gpui-kit.d.ts")), "still no generated typings");
   assert.ok(!fs.existsSync(join(target, "more-agents")), "still no nesting");
   assert.ok(!fs.existsSync(join(appHome, "programs.json")), "programs.json still untouched");
 }
@@ -210,6 +216,7 @@ console.log("ok 8: update uses a backup");
   const r = run("scripts/install.mjs", ["--uninstall", "--home", appHome]);
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /Removed/);
+  assert.match(r.out, /bridges\/<id>\/install\.mjs --uninstall/, "points at the bridge uninstaller before the hooks break");
   assert.ok(!fs.existsSync(target), "mod removed");
   assert.ok(fs.existsSync(join(appHome, "mods", "more-agents.bak")), "backup kept");
   assert.ok(!fs.existsSync(join(appHome, "programs.json")), "programs.json untouched");
@@ -218,5 +225,14 @@ console.log("ok 8: update uses a backup");
   assert.match(again.out, /Not installed/);
 }
 console.log("ok 9: uninstall");
+
+// 10. npm runs a script named `install` on every `npm install`; that would
+//     install the mod into the real home, so the manual one is install:mod.
+{
+  const pkg = JSON.parse(fs.readFileSync(join(REPO, "package.json"), "utf8"));
+  assert.equal(pkg.scripts.install, undefined, "no npm install lifecycle script");
+  assert.equal(pkg.scripts["install:mod"], "node scripts/install.mjs");
+}
+console.log("ok 10: npm install leaves the mod alone");
 
 console.log("validate.test: OK");

@@ -117,13 +117,26 @@ export function scan(programs, catalog, ownedKeys = []) {
       if (typeof otherRun[0] !== "string" || otherRun[0] !== otherRun[0].toLowerCase()) continue;
       if (!oneEditApart(key, other)) continue;
       if (!oneEditApart(run[0].toLowerCase(), otherRun[0].toLowerCase())) continue;
-      out.push({
-        kind: "remove",
-        key,
-        neighbor: other,
-        owned: owned.has(key),
-        message: `${key}: run ${JSON.stringify(run[0])} looks like a typo of ${other} (run ${JSON.stringify(otherRun[0])}). Remove the typo only; ${other} is left as is.`,
-      });
+      if (owned.has(key)) {
+        out.push({
+          kind: "remove",
+          key,
+          neighbor: other,
+          reason: "typo",
+          owned: true,
+          message: `${key}: run ${JSON.stringify(run[0])} looks like a typo of ${other} (run ${JSON.stringify(otherRun[0])}). Remove the typo only; ${other} is left as is.`,
+        });
+      } else {
+        // The mod only removes what it wrote, so an unowned typo is a warning:
+        // no Remove button that would always refuse.
+        out.push({
+          kind: "warn",
+          key,
+          neighbor: other,
+          reason: "typo",
+          message: `${key}: run ${JSON.stringify(run[0])} looks like a typo of ${other} (run ${JSON.stringify(otherRun[0])}). This mod did not write it; remove it by hand and leave ${other} as is.`,
+        });
+      }
       break;
     }
   }

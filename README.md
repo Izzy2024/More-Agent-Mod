@@ -43,7 +43,7 @@ scripts/
   install.mjs                copies/updates/uninstalls the mod in the app home
   smoke-test.mjs             tests main.js logic with stubs (no UI)
   smoke/                     stubs and *.test.mjs (one sandbox per file)
-package.json                 npm run validate | test | check | install
+package.json                 npm run validate | test | check | install:mod
 .github/workflows/ci.yml     validate + smoke on Linux and macOS, node 22
 ```
 

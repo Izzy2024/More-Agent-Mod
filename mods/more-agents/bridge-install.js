@@ -15,9 +15,10 @@ const defaultFileExists = async (path) => {
   try { await readFile(path); return true; } catch { return false; }
 };
 
-// The repo root of a checkout: <root>/mods/more-agents/main.js -> <root>.
-// Anything else (an installed copy, a test temp folder) has no checkout to
-// trust, so it gets null instead of a guess.
+// The folder above mods/more-agents: <root>/mods/more-agents/main.js -> <root>.
+// A checkout keeps bridges/ there; an installed copy keeps them inside the mod
+// folder, which planBridge tries next. Anything else (a test temp folder) has
+// no checkout to trust, so it gets null instead of a guess.
 export function repoRootFrom(importMetaUrl) {
   let path = String(importMetaUrl ?? "");
   if (path.startsWith("file://")) path = path.slice("file://".length);
@@ -47,16 +48,25 @@ export async function planBridge(agent, { repoRoot, dryRun = true, fileExists = 
   if (!root || typeof repoRoot !== "string") {
     return bridgeError("This dialog was not loaded from a checkout, so it cannot find the bridge installers. Nothing was run.");
   }
-  const script = `${root}/${bridge}/install.mjs`;
-  let present = false;
-  try {
-    present = await fileExists(script);
-  } catch {
-    present = false;
+  // A checkout keeps bridges/ at the root; an installed copy keeps it next to
+  // main.js. Try the checkout layout first, then the installed one.
+  const candidates = [root, `${root}/mods/more-agents`];
+  let found = null;
+  for (const candidate of candidates) {
+    const script = `${candidate}/${bridge}/install.mjs`;
+    let present = false;
+    try {
+      present = await fileExists(script);
+    } catch {
+      present = false;
+    }
+    if (present) { found = { root: candidate, script }; break; }
   }
-  if (!present) {
-    return bridgeError(`The bridge installer was not found: ${script}. Nothing was run.`);
+  if (!found) {
+    return bridgeError(`The bridge installer was not found: neither ${candidates[0]}/${bridge}/install.mjs nor ${candidates[1]}/${bridge}/install.mjs exists. Nothing was run.`);
   }
+  const bridgeRoot = found.root;
+  const script = found.script;
   const dry = dryRun !== false;
   const argv = ["node", script, ...(dry ? ["--dry-run"] : [])];
   const name = String(agent?.name ?? agent?.id ?? "this agent").replace(/\s+/g, " ");
@@ -65,8 +75,8 @@ export async function planBridge(agent, { repoRoot, dryRun = true, fileExists = 
     ok: true,
     bridge,
     script,
-    repoRoot: root,
-    cwd: root,
+    repoRoot: bridgeRoot,
+    cwd: bridgeRoot,
     dryRun: dry,
     argv,
     summary,
