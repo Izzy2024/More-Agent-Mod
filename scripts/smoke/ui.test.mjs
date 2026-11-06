@@ -9,10 +9,13 @@ fs.mkdirSync(HOME, { recursive: true });
 const P = HOME + "/programs.json";
 const OWN = "more-agents.keys";
 
-async function boot({ file, programs, own, onPath, mode } = {}) {
+async function boot({ file, programs, own, onPath, shOnPath, mode } = {}) {
   delete process.env.MA_FAIL_WRITE;
   delete process.env.MA_EXEC_FAIL;
+  delete process.env.MA_SH_ONPATH;
+  delete process.env.MA_LOGIN_FAIL;
   process.env.MA_ONPATH = onPath ?? "omp aider";
+  if (shOnPath !== undefined) process.env.MA_SH_ONPATH = shOnPath;
   process.env.MA_KNOWN_AGENTS = "claude";
   notes.length = 0;
   setShared(OWN, own);
@@ -36,11 +39,11 @@ const rowOf = (m, name) => {
   return line;
 };
 
-// 4. A missed PATH check is not success. installed / not found / could not check.
+// 4. A missed check is not success. installed / not installed / could not check.
 {
   const { m } = await boot({ programs: {} });
   assert.match(rowOf(m, "Oh My Pi (omp)"), /:: installed$/);
-  assert.match(rowOf(m, "Command Code"), /not found on this PATH/);
+  assert.match(rowOf(m, "Command Code"), /not installed/);
   assert.doesNotMatch(rowOf(m, "Command Code"), /in the \+ menu/);
   delete m.onPath.kilo;
   const kilo = rowOf(m, "Kilo Code CLI");
@@ -57,6 +60,30 @@ const rowOf = (m, name) => {
   assert.match(owned, /could not check/);
   assert.doesNotMatch(owned, /in the \+ menu/);
 }
+// lane-path: the login shell decides, the way Herdr's + menu does. `kilo` is
+// only in the login shell's answer here, so a probe through `sh` would miss it.
+{
+  const { m } = await boot({ programs: {}, onPath: "omp kilo", shOnPath: "omp" });
+  assert.match(rowOf(m, "Kilo Code CLI"), /:: installed$/, "the login shell sees kilo");
+}
+// A login shell that fails still falls back to the app's own PATH.
+{
+  const { m } = await boot({ programs: {}, onPath: "omp kilo", shOnPath: "omp kilo" });
+  process.env.MA_LOGIN_FAIL = "1";
+  await m.detect();
+  delete process.env.MA_LOGIN_FAIL;
+  assert.match(rowOf(m, "Kilo Code CLI"), /:: installed$/, "a failed login probe falls back");
+}
+// lane H fills foundAt; this lane only paints it: installed, but out of reach.
+{
+  const { m } = await boot({ programs: {} });
+  m.foundAt = { "command-code": "/Users/x/.npm-global/bin/command-code" };
+  const cc = rowOf(m, "Command Code");
+  assert.match(cc, /installed, but Herdr can't see it/);
+  assert.match(cc, /\/Users\/x\/\.npm-global\/bin\/command-code/);
+  assert.doesNotMatch(cc, /not installed/);
+  assert.doesNotMatch(cc, /:: installed$/);
+}
 // A later probe that fails is not allowed to keep the previous verdict.
 {
   const { m } = await boot({ programs: {} });
@@ -68,7 +95,7 @@ const rowOf = (m, name) => {
   assert.match(rowOf(m, "Oh My Pi (omp)"), /could not check/);
   assert.doesNotMatch(rowOf(m, "Oh My Pi (omp)"), /installed/);
 }
-console.log("ok 4: PATH badge is installed / not found / could not check");
+console.log("ok 4: badge is installed / not installed / could not check, by the login shell");
 
 // 5. A failed save is an error, the buttons show Saving…, and the selection stays.
 {

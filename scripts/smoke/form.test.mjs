@@ -238,7 +238,7 @@ const pathSettle = () => Promise.all(spawned.splice(0));
 const pathRead = () => JSON.parse(fs.readFileSync(P, "utf8"));
 const pathEnv = (bins) => { process.env.MA_ONPATH = bins; };
 
-// Exact match: no PATH warning, run[0] unchanged.
+// Exact match: no warning about a missing command, run[0] unchanged.
 pathEnv("empryo omp aider");
 m.onPath = {};
 await m.detect();
@@ -249,7 +249,20 @@ await pathSettle();
 let ep = pathRead().programs["empryo-agent"];
 assert.deepEqual(ep.run, ["empryo", "--help"]);
 assert.equal(m.msgLevel, "success");
-assert.ok(!/not on your PATH/i.test(m.msg));
+assert.ok(!/can't be found/i.test(m.msg));
+
+// lane-path: the custom form asks the login shell, like the + menu will.
+// `login-only` is only in the login shell's answer, so a check through `sh`
+// would ask before saving instead of saving straight away.
+pathEnv("omp login-only");
+process.env.MA_SH_ONPATH = "omp";
+m.inputs.key._set("login-only-agent");
+m.inputs.run._set("login-only --help");
+m.addCustom(cx);
+await pathSettle();
+assert.equal(m.confirm, null, "the login shell found it: no confirm");
+assert.deepEqual(pathRead().programs["login-only-agent"].run, ["login-only", "--help"]);
+delete process.env.MA_SH_ONPATH;
 
 // Typo (Empryro vs empryo): missing — confirm before save, not a silent add.
 pathEnv("empryo omp aider");
@@ -260,7 +273,7 @@ m.addCustom(cx);
 await pathSettle();
 assert.ok(m.confirm && m.confirm.kind === "path-missing");
 assert.equal(m.focusedField, "confirm-keep");
-assert.match(m.msg, /Empryro.*not on your PATH.*will not show in the \+ menu/i);
+assert.match(m.msg, /Empryro.*can't be found on this computer.*will not show in the \+ menu/i);
 assert.ok(!("typo-agent" in pathRead().programs));
 
 // Missing command: confirm; Cancel leaves disk clean; Add anyway saves.
@@ -282,9 +295,9 @@ m.resolveConfirm(true, cx);
 await pathSettle();
 ep = pathRead().programs["ghost-agent"];
 assert.deepEqual(ep.run, ["ghost-cmd"]);
-assert.equal(m.msgLevel, "warning", "add anyway keeps saying it is not on PATH");
+assert.equal(m.msgLevel, "warning", "add anyway keeps saying it cannot be found");
 assert.match(m.msg, /Saved ghost-agent/);
-assert.match(m.msg, /not on your PATH/);
+assert.match(m.msg, /can't be found on this computer/);
 assert.match(m.msg, /Agents panel: if it does not report OSC 7501, it needs a status bridge/);
 
 console.log("form.test: keyboard/focus + custom form + PATH resolution OK; notifications:", notes.length);
