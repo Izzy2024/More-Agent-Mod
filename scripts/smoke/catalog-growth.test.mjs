@@ -70,6 +70,19 @@ const okFetch = (status) => async () => ({ status });
 }
 console.log("ok 1: status classification");
 
+// A builtin's `source` has no public page: only its docs are requested.
+{
+  const seen = [];
+  const report = await links.checkCatalog([
+    { id: "g", status: "builtin", docs: "https://example.test/docs", source: "https://example.test/src" },
+    { id: "v", status: "verified", checked: "2026-11-06", docs: "https://example.test/vd", source: "https://example.test/vs" },
+  ], { today: "2026-11-06", fetchImpl: async (url) => { seen.push(url); return { status: 200 }; }, timeoutMs: 1000 });
+  assert.ok(!seen.includes("https://example.test/src"), "builtin source is not requested");
+  assert.ok(seen.includes("https://example.test/docs") && seen.includes("https://example.test/vs"), "docs and verified source are");
+  assert.equal(report.links.length, 0);
+}
+console.log("ok 1b: builtin source skipped");
+
 // 2026-11-06 minus 90 days is 2026-08-08. More than 90 days is a failure.
 {
   const fresh = [{ id: "a", status: "verified", checked: "2026-08-08" }];

@@ -62,6 +62,6 @@ export function planInstall(agent) {
     return { ok: false, code: "no-install", name, error: `No install command that can run for ${name}.` };
   }
   const command = agent.install;
-  const wrapped = `${command}; printf '\\n[finished - press Enter to close]\\n'; read _`;
+  const wrapped = `${command}; printf '\\n[finished - press Enter for a shell]\\n'; read _`;
   return { ok: true, command, argv: ["sh", "-c", wrapped], name: `Install ${name}` };
 }

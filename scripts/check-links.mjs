@@ -129,6 +129,9 @@ export async function checkCatalog(list, { offline, today, fetchImpl, timeoutMs 
     const jobs = [];
     for (const e of list) {
       for (const field of ["docs", "source"]) {
+        // A builtin's `source` names Herdr's own defaults/programs.json, which has
+        // no public page (the old GitHub URL is a 404): only its docs are checked.
+        if (field === "source" && e?.status === "builtin") continue;
         if (typeof e?.[field] === "string") jobs.push({ id: e.id ?? "?", field, url: e[field] });
       }
     }

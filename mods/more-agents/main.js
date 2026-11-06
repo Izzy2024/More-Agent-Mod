@@ -825,7 +825,7 @@ export default class MoreAgents extends View {
         this.say("info", copy.bridgePrompt(action ?? "preview", a.name, file, command, summary));
         this.moveFocus("confirm-keep", cx);
       } catch (e) {
-        this.say("error", `Could not prepare the bridge install: ${errText(e)}. Nothing was run.`);
+        this.say("error", (this.copy ?? copyFor(DEFAULT_LANG)).bridgePrepareFailed(errText(e)));
       } finally {
         cx.notify();
       }
@@ -1033,7 +1033,7 @@ export default class MoreAgents extends View {
     // status is read again. An unknown status still only runs the dry run.
     if (c.kind === "bridge") {
       this.moveFocus("add-selected", cx); // the confirm buttons are gone
-      if (!overwrite) { this.say("info", "Cancelled."); cx.notify(); return; }
+      if (!overwrite) { this.say("info", (this.copy ?? copyFor(DEFAULT_LANG)).cancelled); cx.notify(); return; }
       this.busy = true;
       cx.spawn(async (cx) => {
         try {
@@ -1042,7 +1042,7 @@ export default class MoreAgents extends View {
           if (r.ok) this.say(c.runPlan ? "success" : "info", r.text);
           else this.say("error", r.error);
         } catch (e) {
-          this.say("error", `Could not run the bridge installer: ${errText(e)}. Nothing was run.`);
+          this.say("error", (this.copy ?? copyFor(DEFAULT_LANG)).bridgeRunFailed(errText(e)));
         } finally {
           this.busy = false;
           cx.notify();

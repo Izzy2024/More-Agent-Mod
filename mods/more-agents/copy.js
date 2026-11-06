@@ -55,6 +55,8 @@ const EN = {
     const verb = action === "install" ? "Install" : action === "uninstall" ? "Remove" : "Dry run";
     return `${verb} the ${name} status bridge? Hook file: ${file}. Command: ${command}. ${summary}`;
   },
+  bridgePrepareFailed: (err) => `Could not prepare the bridge install: ${err}. Nothing was run.`,
+  bridgeRunFailed: (err) => `Could not run the bridge installer: ${err}. Nothing was run.`,
   // lane-install
   install: "Install",
   installConfirm: (name, command) => `Install ${name}? This runs in a new tab: ${command}`,
@@ -185,6 +187,8 @@ const ES = {
         : `¿Probar sin escribir el bridge de estado de ${name}?`;
     return `${title} Archivo de hooks: ${file}. Comando: ${command}. ${summary}`;
   },
+  bridgePrepareFailed: (err) => `No se pudo preparar la instalación del bridge: ${err}. No se ejecutó nada.`,
+  bridgeRunFailed: (err) => `No se pudo ejecutar el instalador del bridge: ${err}. No se ejecutó nada.`,
   // lane-install
   install: "Instalar",
   installConfirm: (name, command) => `¿Instalar ${name}? Se ejecuta en una pestaña nueva: ${command}`,
