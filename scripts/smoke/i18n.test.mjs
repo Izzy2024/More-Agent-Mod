@@ -306,7 +306,7 @@ console.log("ok 10: detected banner");
   const { m, cx, drain } = await boot({ programs: {}, onPath: "omp", lang: "es" });
   const aider = m.agentOf("aider");
   assert.equal(m.previewInstall(aider, cx), true);
-  assert.match(m.msg, /^¿Instalar Aider\? Se ejecuta en una pestaña nueva: python -m pip install aider-install && aider-install$/);
+  assert.match(m.msg, /^¿Instalar Aider y añadirlo a tu menú \+ al terminar\? Se ejecuta en una pestaña nueva: python -m pip install aider-install && aider-install$/);
   noEnglish(m, "install confirm");
 
   m.resolveConfirm(false, cx);
@@ -317,7 +317,7 @@ console.log("ok 10: detected banner");
   m.resolveConfirm(true, cx);
   await drain();
   assert.equal(ran.length, 1);
-  assert.match(m.msg, /^Instalando Aider en una pestaña nueva; pulsa Volver a comprobar al terminar\.$/);
+  assert.match(m.msg, /^Esperando a que Aider termine de instalarse\.\.\.$/);
   noEnglish(m, "install started");
 
   assert.equal(m.previewInstall(m.agentOf("trae-agent"), cx), false);

@@ -59,11 +59,21 @@ const EN = {
   bridgeRunFailed: (err) => `Could not run the bridge installer: ${err}. Nothing was run.`,
   // lane-install
   install: "Install",
-  installConfirm: (name, command) => `Install ${name}? This runs in a new tab: ${command}`,
-  installStarted: (name) => `Installing ${name} in a new tab; press Re-check when it finishes.`,
+  installConfirm: (name, command) => `Install ${name} and add it to your + menu when it finishes? This runs in a new tab: ${command}`,
+  installStarted: (name) => `Waiting for ${name} to finish installing...`,
   detected: (n, list) => `${n} installed ${n === 1 ? "agent is" : "agents are"} not in your + menu: ${list}`,
   addAll: "Add all",
   recheck: "Re-check",
+  // lane-guided: install prerequisites and the install watcher.
+  installAdd: "Install and add",
+  installDone: (name) => `${name} is installed and now shows in your + menu.`,
+  installStillMissing: (name) => `${name} is still not installed. When the install tab finishes, press Re-check.`,
+  needsTool: (tool) => `Needs ${tool}`,
+  toolLabel: (id) => ({ node: "Node.js", python: "Python", brew: "Homebrew", uv: "uv", curl: "curl" })[id] ?? id,
+  toolNeed: (agent, tool, where) => `To install ${agent} you first need ${tool}. ${where}`,
+  toolNeedPython3: (agent, where) => `To install ${agent} you first need the command \`python\`, but your computer only has \`python3\`. ${where}`,
+  toolWhere: (_id, url) => (url ? `Get it from ${url}.` : "It comes with macOS and Linux; if it is missing, reinstall it with your system package manager."),
+  toolThenRecheck: "Then come back and press Re-check.",
   // lane-i18n: the messages the write paths, the rows and the repairs build.
   // The English strings are the exact text main.js painted before this lane.
   appName: "More agents",
@@ -191,11 +201,21 @@ const ES = {
   bridgeRunFailed: (err) => `No se pudo ejecutar el instalador del bridge: ${err}. No se ejecutó nada.`,
   // lane-install
   install: "Instalar",
-  installConfirm: (name, command) => `¿Instalar ${name}? Se ejecuta en una pestaña nueva: ${command}`,
-  installStarted: (name) => `Instalando ${name} en una pestaña nueva; pulsa Volver a comprobar al terminar.`,
+  installConfirm: (name, command) => `¿Instalar ${name} y añadirlo a tu menú + al terminar? Se ejecuta en una pestaña nueva: ${command}`,
+  installStarted: (name) => `Esperando a que ${name} termine de instalarse...`,
   detected: (n, list) => `${n} ${n === 1 ? "agente instalado no está" : "agentes instalados no están"} en tu menú +: ${list}`,
   addAll: "Añadir todos",
   recheck: "Volver a comprobar",
+  // lane-guided: requisitos de la instalación y el vigilante que espera a que termine.
+  installAdd: "Instalar y añadir",
+  installDone: (name) => `${name} ya está instalado y aparece en tu menú +.`,
+  installStillMissing: (name) => `${name} todavía no está instalado. Cuando termine la pestaña de instalación, pulsa Volver a comprobar.`,
+  needsTool: (tool) => `Necesita ${tool}`,
+  toolLabel: (id) => ({ node: "Node.js", python: "Python", brew: "Homebrew", uv: "uv", curl: "curl" })[id] ?? id,
+  toolNeed: (agent, tool, where) => `Para instalar ${agent} primero necesitas ${tool}. ${where}`,
+  toolNeedPython3: (agent, where) => `Para instalar ${agent} primero necesitas el comando \`python\`, pero tu equipo solo tiene \`python3\`. ${where}`,
+  toolWhere: (_id, url) => (url ? `Consíguelo en ${url}.` : "Viene con macOS y Linux; si falta, reinstálalo con el gestor de paquetes de tu sistema."),
+  toolThenRecheck: "Vuelve aquí y pulsa Volver a comprobar.",
   // lane-i18n: los mensajes que construyen las rutas de escritura, las filas y las reparaciones.
   appName: "Más agentes",
   headingRead: "No se puede leer programs.json",

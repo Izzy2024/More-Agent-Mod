@@ -53,6 +53,44 @@ export function isRunnableInstall(text) {
     SHAPES.some((re) => re.test(part)) || (i === 1 && BARE.test(part)));
 }
 
+// lane-guided: the tools an install command needs before it can run, in the
+// order they appear. Only the first word of each ` && ` part counts, so
+// `python -m pip install x` needs `python` (not `pip`) and a trailing
+// `aider-install` needs nothing.
+const INSTALL_TOOLS = ["npm", "python", "pip", "brew", "uv", "curl"];
+export function requiredTools(install) {
+  if (typeof install !== "string" || !install) return [];
+  const tools = [];
+  for (const part of install.split(" && ")) {
+    const word = part.trim().split(/\s+/)[0];
+    if (INSTALL_TOOLS.includes(word) && !tools.includes(word)) tools.push(word);
+  }
+  return tools;
+}
+
+// A tool is missing only when the login shell said so: an unknown tool
+// (undefined) must never turn into a false alarm. `python3Only` means the
+// installer wants `python` and the computer has `python3`, which is a hint,
+// not a different requirement.
+export function missingTools(install, onPath) {
+  const path = onPath ?? {};
+  return requiredTools(install)
+    .filter((tool) => path[tool] === false)
+    .map((tool) => ({ tool, python3Only: tool === "python" && path.python3 === true }));
+}
+
+// Where to get each tool. `id` selects the wording in copy.js; `url` is shown
+// as plain text (never opened) and is null for a tool that ships with the
+// system. `pip` uses the Python page: it is installed with Python.
+export const TOOL_HELP = {
+  npm: { id: "node", url: "https://nodejs.org" },
+  python: { id: "python", url: "https://www.python.org/downloads/" },
+  pip: { id: "python", url: "https://www.python.org/downloads/" },
+  brew: { id: "brew", url: "https://brew.sh" },
+  uv: { id: "uv", url: "https://docs.astral.sh/uv/" },
+  curl: { id: "curl", url: null },
+};
+
 // The argv Herdr runs for the install: `sh -c` keeps the tab open after the
 // command so its output can be read, then waits for Enter.
 export function planInstall(agent) {
