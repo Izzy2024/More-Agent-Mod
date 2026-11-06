@@ -5,11 +5,19 @@
   "type": "module",
   "description": "Herdr App mod that adds agents to the + menu",
   "license": "MIT",
-  "bin": { "more-agents": "scripts/install.mjs" },
+  "bin": {
+    "more-agents": "scripts/install.mjs"
+  },
   "scripts": {
     "validate": "node scripts/validate-catalog.mjs",
     "test": "node scripts/smoke-test.mjs",
     "check": "npm run validate && node scripts/check-syntax.mjs && npm test",
     "install:mod": "node scripts/install.mjs"
-  }
+  },
+  "files": [
+    "mods",
+    "bridges",
+    "scripts",
+    "keys.json"
+  ]
 }
