@@ -12,6 +12,7 @@ import CATALOG from "./catalog.js";
 import { scan } from "./repair.js"; // lane-repair
 // lane-catalog: dialog copy. English is the default; see copy.js.
 import { LANGS, DEFAULT_LANG, copyFor } from "./copy.js";
+import { planBridge, runBridgePlan, repoRootFrom } from "./bridge-install.js"; // lane-bridge
 
 const OWN = "more-agents.keys"; // key -> fingerprint of the entry this mod wrote
 const KEY_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
@@ -397,7 +398,8 @@ export default class MoreAgents extends View {
   selectable() {
     return [...this.selected].filter((id) => {
       const a = CATALOG.find((x) => x.id === id);
-      return Boolean(a) && a.status === "verified" && !runOf(this.table?.programs?.[id]);
+      return Boolean(a) && a.status === "verified" && !runOf(this.table?.programs?.[id])
+        && (this.visibleIds?.has(id) ?? true);
     });
   }
 
@@ -665,6 +667,34 @@ export default class MoreAgents extends View {
     });
   }
 
+  // LANE-BRIDGE-PREVIEW: show the bridge installer plan; nothing runs before confirm.
+  previewBridge(a, cx) {
+    if (this.busy) return false;
+    this.confirm = null;
+    cx.spawn(async (cx) => {
+      try {
+        const plan = await planBridge(a, {
+          // A checkout can be named when the mod was copied into the app home.
+          repoRoot: props().repoRoot || repoRootFrom(import.meta.url),
+          dryRun: true,
+          // Same read the rest of the dialog uses; no new filesystem access.
+          fileExists: async (path) => {
+            try { return (await readTextFile(path)) != null; } catch { return false; }
+          },
+        });
+        if (!plan.ok) { this.say("error", plan.error); return; }
+        this.confirm = { kind: "bridge", agentId: a.id, plan };
+        this.say("info", plan.summary);
+        this.moveFocus("confirm-keep", cx);
+      } catch (e) {
+        this.say("error", `Could not prepare the bridge install: ${errText(e)}. Nothing was run.`);
+      } finally {
+        cx.notify();
+      }
+    });
+    return true;
+  }
+
   addSelected(cx) {
     const ids = new Set(this.selectable());
     const pairs = CATALOG.filter((a) => ids.has(a.id)).flatMap((a) => entries(a, this.withContinue));
@@ -813,6 +843,22 @@ export default class MoreAgents extends View {
     const c = this.confirm;
     this.confirm = null;
     if (!c) return;
+    // LANE-BRIDGE-CONFIRM: a bridge plan runs its own dry-run argv only.
+    if (c.kind === "bridge") {
+      this.moveFocus("add-selected", cx); // the confirm buttons are gone
+      if (!overwrite) { this.say("info", "Cancelled."); cx.notify(); return; }
+      this.busy = true;
+      cx.spawn(async (cx) => {
+        try {
+          const r = await runBridgePlan(c.plan, { exec });
+          if (r.ok) this.say("info", r.text); else this.say("error", r.error);
+        } finally {
+          this.busy = false;
+          cx.notify();
+        }
+      });
+      return;
+    }
     if (c.kind === "remove") {
       this.moveFocus("add-selected", cx); // the confirm buttons are gone
       if (overwrite) this.remove(c.keys, cx, true);
@@ -1039,6 +1085,10 @@ export default class MoreAgents extends View {
     if (added) actions.push(this.button(`rm-${a.id}`, "Remove", (cx) => this.remove([a.id], cx), t));
     if (contAdded) actions.push(this.button(`rm-continue-${a.id}`, "Remove continue", (cx) => this.remove([contKey], cx), t));
     if (canAddContinue) actions.push(this.button(`add-continue-${a.id}`, "Add continue", (cx) => this.addContinue(a, cx), t));
+    // LANE-BRIDGE-BUTTON: pointer-only, so the keyboard order stays short.
+    if (typeof a.bridge === "string" && a.bridge.startsWith("bridges/")) {
+      actions.push(this.button(`bridge-${a.id}`, "Bridge", (cx) => this.previewBridge(a, cx), t));
+    }
     return h_flex().id(`row-${a.id}`).px(8).py(5).gap(10).items_center().rounded(8)
       .border_1().border_color(focused ? t.accent : t.popover)
       .role("list_box_option").aria_selected(sel)
@@ -1167,10 +1217,11 @@ export default class MoreAgents extends View {
           .child(this.button("confirm-yes",
             this.confirm.kind === "remove" ? c.removeAnyway
               : this.confirm.kind === "path-missing" ? c.addAnyway
-                : c.overwrite, (cx) => this.resolveConfirm(true, cx), t, true))
+                : this.confirm.kind === "bridge" ? c.dryRun
+                  : c.overwrite, (cx) => this.resolveConfirm(true, cx), t, true))
           .child(this.button("confirm-keep",
             this.confirm.kind === "remove" ? c.keep
-              : this.confirm.kind === "path-missing" ? c.cancel
+              : this.confirm.kind === "path-missing" || this.confirm.kind === "bridge" ? c.cancel
                 : c.keepAsIs, (cx) => this.resolveConfirm(false, cx), t))))
         .when(Boolean(this.msg) && !this.confirm, (e2) => e2.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : this.msgTone(t)).whitespace_normal().child(this.msg)))));
   }

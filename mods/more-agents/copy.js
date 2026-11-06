@@ -34,6 +34,7 @@ const EN = {
   keep: "Keep",
   keepAsIs: "Keep as is",
   cancel: "Cancel",
+  dryRun: "Run dry run",
   bridgeCatalog: (name, bridge, docs) => `Agents panel: ${name} needs the status bridge ${bridge} — see ${docs}.`,
   bridgeCustom: (docs) => `Agents panel: if it does not report OSC 7501, it needs a status bridge — see ${docs}.`,
 };
@@ -61,6 +62,7 @@ const ES = {
   keep: "Conservar",
   keepAsIs: "Dejarlo como está",
   cancel: "Cancelar",
+  dryRun: "Probar sin escribir",
   bridgeCatalog: (name, bridge, docs) => `Panel de agentes: ${name} necesita el bridge de estado ${bridge} — ver ${docs}.`,
   bridgeCustom: (docs) => `Panel de agentes: si no informa OSC 7501, necesita un bridge de estado — ver ${docs}.`,
 };
