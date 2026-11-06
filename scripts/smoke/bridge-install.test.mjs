@@ -88,6 +88,26 @@ assert.match(thrown.error, /Nothing was installed/);
 assert.equal(repoRootFrom("file:///repo/mods/more-agents/main.js"), "/repo");
 assert.equal(repoRootFrom("file:///tmp/x/main.js"), null);
 
+// 6b. Installed copy: bridges/ sits next to main.js, so the bridge root is the
+//     mod folder even though repoRootFrom can only infer the app home.
+{
+  const appHome = fs.mkdtempSync(join(os.tmpdir(), "ma-bridge-installed-"));
+  const mod = join(appHome, "mods", "more-agents");
+  fs.mkdirSync(join(mod, "bridges", "good"), { recursive: true });
+  const installedScript = join(mod, "bridges", "good", "install.mjs");
+  fs.writeFileSync(installedScript, "// fixture installer\n");
+  assert.equal(repoRootFrom("file://" + join(mod, "main.js")), appHome, "the app home is all it can infer");
+  const installedPlan = await planBridge(good, { repoRoot: appHome });
+  assert.equal(installedPlan.ok, true, installedPlan.error);
+  assert.equal(installedPlan.script, installedScript);
+  assert.equal(installedPlan.cwd, mod, "runs from the installed mod folder");
+  const ranInstalled = await runBridgePlan(installedPlan, { exec: okExec });
+  assert.equal(ranInstalled.ok, true, ranInstalled.error);
+  assert.equal(calls.at(-1).options.cwd, mod);
+  fs.rmSync(appHome, { recursive: true, force: true });
+}
+console.log("ok 6b: installed copy uses its own bridges/");
+
 // 7. The dialog paints a Bridge button only for a `bridge` field, and the
 //    button is not a Tab stop. Without a checkout it refuses safely.
 {
@@ -100,6 +120,7 @@ assert.equal(repoRootFrom("file:///tmp/x/main.js"), null);
   await Promise.all(spawned.splice(0));
   m.render();
   assert.ok(m.shown.includes("button:bridge-command-code"), "Command Code row has Bridge");
+  assert.ok(m.shown.includes("button:bridge-cursor"), "the builtin cursor row reaches its bridge");
   assert.ok(!m.shown.includes("button:bridge-omp"), "rows without a bridge do not");
   assert.ok(!m.actionIds().includes("bridge-command-code"), "not a row action");
   assert.ok(!m.tabOrder().includes("bridge-command-code"), "not a Tab stop");
