@@ -26,8 +26,19 @@ jobs:
       - name: Validate catalog
         run: node scripts/validate-catalog.mjs
 
+      - name: Syntax check
+        run: node scripts/check-syntax.mjs
+
       - name: Smoke tests
         run: node scripts/smoke-test.mjs
+
+      # Freshness only: the network probe is the weekly catalog-health workflow,
+      # so a dead upstream URL never fails a push. Not blocking either: an old
+      # `checked` date must not stop unrelated pull requests (the weekly
+      # catalog-health workflow is where it is acted on).
+      - name: Catalog freshness (offline)
+        continue-on-error: true
+        run: node scripts/check-links.mjs --offline
 
       # No herdr-app checkout in CI: build a local fixture from the catalog,
       # then check that --icons and --builtin really reject bad data.
@@ -74,6 +85,9 @@ jobs:
             exit 1
           fi
 
+      # GitHub's hosted runners do not ship herdr-app, so on CI this step only
+      # prints the skip line. It is a convenience for self-hosted runners and a
+      # local run; it is not a real check of the mod.
       - name: herdr-app check (only if installed)
         shell: bash
         run: |
@@ -82,3 +96,28 @@ jobs:
           else
             echo "herdr-app is not installed; skipping"
           fi
+
+  # EXPERIMENTAL, not a merge gate. The author has no Windows machine, and the
+  # smoke tests spawn `sh` and use POSIX paths, so a red run here is expected
+  # until that is fixed. continue-on-error keeps the job out of the required
+  # checks: a red experimental job must not block a merge. Remove that line
+  # once Windows has actually been tested.
+  test-windows:
+    name: Node 22 on windows-latest (experimental)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Git Bash is what the tests expect; cmd.exe would not run them at all.
+      - name: Validate catalog
+        shell: bash
+        run: node scripts/validate-catalog.mjs
+
+      - name: Smoke tests
+        shell: bash
+        run: node scripts/smoke-test.mjs

@@ -1,76 +1,57 @@
 [English: README.md](README.md)
 
-# More agents: mod de Herdr App
+# Más agentes: un mod de Herdr App
 
-Añade al menú + de Herdr App agentes que no vienen listos. Los eliges de un **catálogo de datos** (`mods/more-agents/catalog.js`) o añades uno propio con el formulario. Escribe en `~/.config/herdr-app/programs.json`:
-- fusiona con lo que ya tienes;
-- tras un guardado correcto guarda la versión anterior en `programs.json.more-agents.bak`; el backup es best-effort, así que un fallo se avisa sin bloquear la escritura;
-- nunca pisa una entrada tuya que ya tenga `run`;
-- si el archivo cambió entre medias lo relee y reintenta una vez; un segundo conflicto no escribe nada;
-- si el comando de una entrada se desvió del catálogo (`cmd` en vez de `command-code`) o una clave propia es un typo a una edición, el diálogo propone la reparación y solo escribe si confirmas;
-- la primera escritura guarda además el archivo tal como estaba antes de que el mod lo tocara en `programs.json.more-agents.orig.bak` (no se reemplaza nunca).
+Añade al menú + de Herdr agentes de programación que no vienen listos para arrancar: elígelos de un catálogo o añade tu propio comando.
+
+![Más agentes](preview.png)
 
 ## Instalar
 
-En Linux y macOS, Herdr App guarda su configuración en `~/.config/herdr-app`:
+`npx github:Izzy2024/More-Agent-Mod` (un comando; necesita `node` 22+), o clona:
 
 ```sh
-git clone https://github.com/Izzy2024/More-Agent-Mod.git
-cd More-Agent-Mod
-node scripts/install.mjs            # copia el mod a ~/.config/herdr-app/mods/more-agents
+git clone https://github.com/Izzy2024/More-Agent-Mod.git && cd More-Agent-Mod && node scripts/install.mjs
 ```
 
-El instalador prepara la copia y la intercambia con un rename, así que una actualización nunca deja una carpeta a medias ni anidada (`mods/more-agents/more-agents`), y guarda la anterior como `more-agents.bak`. `--dry-run` enseña lo que haría y `--uninstall` quita el mod (ninguno toca `programs.json` ni `keys.json`). Actualizar es `git pull && node scripts/install.mjs`.
+`--with-key` asigna además Alt+Mayús+A; `--dry-run` enseña lo que cambiaría; `--uninstall` quita el mod (y esa tecla, si sigue siendo la que escribió `--with-key`).
 
-Ábrelo con `herdr-app do mod.open --name more-agents`, o, si quieres, asigna una tecla fusionando la entrada de `keys.json` (Alt+Shift+A) en `~/.config/herdr-app/keys.json`.
+## Ábrelo
 
-Hecho para funcionar en Linux, macOS y Windows (el mod le pide a Herdr su carpeta de configuración y usa `sh` en Linux/macOS y `where` en Windows para detectar los agentes instalados), pero de momento solo se ha probado en Linux.
+`herdr-app do mod.open --name more-agents`, o pulsa Alt+Mayús+A después de `--with-key`.
 
-Es un mod de Herdr App (se instala con el script de arriba) y no un plugin de `herdr plugin install`, que es otro sistema de extensiones para la CLI de Herdr.
+## Lo que puedes hacer
 
-```
-RECIPE.md                    ficha para herdr.dev/mods
-CONTRIBUTING.md              cómo añadir un agente por PR
-preview.png                  captura real (herdr-app shot, Herdr 0.1.10, Linux)
-keys.json                    opcional: alt-shift-a -> mod.open:more-agents
-programs.snippet.json        alternativa sin mod (omp + Command Code a mano)
-mods/more-agents/
-  main.js                    diálogo
-  catalog.js                 catálogo (solo datos)
-  mod.json                   place none + overlay dialog
-scripts/
-  validate-catalog.mjs       valida el esquema del catálogo
-  install.mjs                copia/actualiza/desinstala el mod en la carpeta de la app
-  smoke-test.mjs             prueba la lógica de main.js con stubs (sin UI)
-  smoke/                     stubs y *.test.mjs (un sandbox por archivo)
-package.json                 npm run validate | test | check | install:mod
-.github/workflows/ci.yml     valida + smoke en Linux y macOS, node 22
-```
+- Elige agentes del catálogo y pulsa **Añadir**; el diálogo enseña cuáles están instalados y cuáles no.
+- Pulsa **Instalar** en un agente que falta: pregunta antes, ejecuta el comando de instalación en una pestaña nueva y añade el agente cuando el comando aparece.
+- Si un agente está instalado en una carpeta que Herdr no ve, usa **Usar ruta completa** para que su entrada apunte al archivo real (pregunta antes).
+- Añade cualquier otro agente de línea de comandos con **Añadir tu propio agente...**: una clave, un nombre y un comando.
+- Pulsa **Eliminar** (o **Eliminar continue**) para quitar solo lo que añadió este mod. El menú + se actualiza solo.
+- Cambia el diálogo entre inglés y español con EN / ES en la cabecera.
+- Si quieres, dale a un agente un bridge de estado para el panel Agentes; el diálogo pregunta antes de instalarlo o quitarlo.
 
-## ¿Por qué no sale en el menú + algo que añadí?
+## Conviene saber
 
-El menú + de Herdr (mod `new-menu`) enseña todos los agentes **instalados**, es decir, cuyo `run[0]` está en el PATH. De los no instalados solo enseña los dos primeros del orden interno, que siempre son Claude Code y Codex. Ningún campo de `programs.json` cambia esto.
+**Puede que un agente añadido no salga en el menú +.** Herdr enseña todos los agentes instalados, es decir, aquellos cuyo `run[0]` está en el PATH. De los que no están instalados solo enseña los dos primeros de su orden interno, que siempre son Claude Code y Codex. Ningún campo de `programs.json` cambia esto. El diálogo marca cada fila como `instalado`, `no instalado`, `no se pudo comprobar` o `instalado, pero Herdr no lo ve`, y la caché de Herdr puede tardar hasta 60 s.
 
-Por eso cada fila lleva un badge — `instalado`, `no instalado`, `no se pudo comprobar` cuando la propia comprobación falló, o `instalado, pero Herdr no lo ve` — y la pista de instalación si falta el comando. El diálogo comprueba los agentes instalados con tu shell de inicio de sesión, igual que el menú + al lanzar un programa. En cuanto el comando existe, el agente aparece; la caché de Herdr tarda hasta 60 s. El toast solo dice cuántos se añadieron y cuántos necesitan instalación; las pistas por agente se quedan en el diálogo.
+**Lo que escribe y guarda el mod.**
 
-Los mensajes llevan nivel (error, warning, success, info) y se pintan según él, un guardado en curso muestra "Saving…" y deshabilita los botones de guardar, y si `programs.json` no se puede leer o parsear el banner dice por qué y ofrece **Reload** (`load()` + `detect()`), en lugar de pedirte que reabras el diálogo.
+- `~/.config/herdr-app/programs.json`: fusiona sus entradas y nunca reemplaza una tuya que ya tenga `run`.
+- Tras un guardado correcto, el archivo anterior va a `programs.json.more-agents.bak`; el primer guardado guarda además el archivo tal como estaba antes del mod en `programs.json.more-agents.orig.bak`.
+- Las copias son un extra: si fallan, se avisa sin bloquear el guardado.
 
-El panel **Agents** es otra lista: solo muestra terminales que reportan OSC 7501. Los que reportan nativo (omp, OpenCode, Claude Code, Codex) no necesitan nada; para el resto, `bridges/` en este repo trae adaptadores opt-in (Cursor, Command Code, Empryo) que se fusionan en los hooks de ese agente con backup y `--uninstall`. Una fila del catálogo que lo necesita lleva `bridge`; el diálogo enseña si ese bridge está instalado y solo lo instala o lo quita si tú lo confirmas, y los mismos adaptadores siguen funcionando a mano con `--uninstall`.
+**Lo que nunca cambia.** Tus entradas con `run` y los demás campos que ya están en `programs.json`; `keys.json` (salvo que pases `--with-key`); los archivos de hooks de otros agentes (salvo que instales un bridge).
 
-Teclado: el foco empieza en el cuadro de búsqueda. Tab y Shift+Tab van búsqueda → continue → Add → "Añadir tu propio agente" → (solo con ese formulario abierto) clave → nombre → comando → Add custom → los botones Remove/Remove continue y Add continue de los agentes añadidos → Reload (solo si el archivo está roto) → Close, y no dan la vuelta. Flecha abajo desde la búsqueda va a la primera fila del catálogo que se puede añadir; ↑/↓ mueven entre esas filas y Espacio/Enter las marcan. Espacio/Enter también conmutan continue, "Añadir tu propio agente" y los botones. Las cabeceras de sección se pliegan con un clic y no son paradas de Tab. Los comandos se parten como un programa, no como un shell: comillas simples y dobles agrupan y solo `\"` y `\\` escapan, así que las rutas entre comillas sobreviven; una comilla sin cerrar es un error. El formulario propio no escribe `match` (Herdr lo deriva de `run[0]`), y se rechazan las claves `shell`, `program`, `agent` y cualquiera que acabe en `-continue`. Si el comando no se encuentra en este equipo, el diálogo pregunta antes de guardarlo: la entrada no sale en el menú + hasta que lo instales, así una errata no desaparece en silencio.
+## Compatibilidad
 
-## Probar en local
+Probado en Herdr 0.1.13 en macOS (comprobación estática y diálogo real); antes, en Herdr 0.1.10 en Linux. Windows no está probado. Necesita Herdr App 0.1.8 o posterior y `node` 22+ para el instalador y los bridges de estado.
 
-1. `node scripts/install.mjs` (o copia `mods/more-agents/` a `~/.config/herdr-app/mods/more-agents/` a mano).
-2. Valida con `herdr-app check ~/.config/herdr-app/mods/more-agents`.
-3. Ábrelo desde la paleta de comandos: `mod.open` → `more-agents`. También puedes fusionar `keys.json` en el tuyo.
-4. Revisa errores con `herdr-app status` y haz la captura para `preview.png` con `herdr-app shot`.
+## Contribuir / Desarrollo
 
-## Comprobaciones sin Herdr
+Mira [CONTRIBUTING.es.md](CONTRIBUTING.es.md) para añadir un agente por pull request, y [docs/ARCHITECTURE.es.md](docs/ARCHITECTURE.es.md) para saber cómo funciona el mod por dentro.
 
 ```sh
-node scripts/validate-catalog.mjs [--icons <herdr-app>/defaults/icons --builtin <herdr-app>/defaults/programs.json]
-node scripts/smoke-test.mjs
+node scripts/validate-catalog.mjs   # esquema del catálogo
+node scripts/smoke-test.mjs         # lógica del diálogo, sin UI
+node scripts/check-links.mjs        # URL de docs/source y frescura (--offline: solo frescura)
 ```
-
-Estado: `herdr-app check` pasa y el diálogo se probó de punta a punta (añadir, quitar, menú +, formulario personalizado) en Herdr App 0.1.10 en Linux.
