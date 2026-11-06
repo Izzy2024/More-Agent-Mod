@@ -55,6 +55,10 @@ export function scan(programs, catalog, ownedKeys = []) {
         kind: "warn",
         key: a.id,
         reason: "match-agent",
+        // lane-i18n: `code` + `params` let the dialog build the text in its
+        // language; `message` stays for the tests and for older callers.
+        code: "builtinMatchAgent",
+        params: { key: a.id },
         message: `${a.id} is builtin, but its match lists the exact token "agent": Herdr may route generic agent launches to it. This mod did not write it; fix it by hand.`,
       });
       continue;
@@ -70,6 +74,8 @@ export function scan(programs, catalog, ownedKeys = []) {
         match: a.match ? [...a.match] : null,
         entry: updated(entry, a),
         reason: "shell-token",
+        code: "cmdShell",
+        params: { key: a.id, catalogCommand: a.run.join(" ") },
         message: `${a.id}: run/match use the Windows shell token "cmd"; the catalog command is ${a.run.join(" ")}. Repair asks before writing.`,
       });
       continue;
@@ -82,6 +88,8 @@ export function scan(programs, catalog, ownedKeys = []) {
         kind: "warn",
         key: a.id,
         reason: "shell",
+        code: "shell",
+        params: { key: a.id, run: JSON.stringify(run[0]), catalogCommand: a.run.join(" ") },
         message: `${a.id}: run starts with the shell ${JSON.stringify(run[0])}, not the catalog command ${a.run.join(" ")}. Left as is; fix it by hand.`,
       });
     } else if (owned.has(a.id)) {
@@ -92,6 +100,8 @@ export function scan(programs, catalog, ownedKeys = []) {
         match: a.match ? [...a.match] : null,
         entry: updated(entry, a),
         reason: "owned-drift",
+        code: "ownedDrift",
+        params: { key: a.id, run: JSON.stringify(run), catalog: JSON.stringify(a.run) },
         message: `${a.id}: this mod wrote run ${JSON.stringify(run)}, the catalog now documents ${JSON.stringify(a.run)}. Repair asks before writing.`,
       });
     } else {
@@ -99,6 +109,8 @@ export function scan(programs, catalog, ownedKeys = []) {
         kind: "warn",
         key: a.id,
         reason: "differs",
+        code: "differs",
+        params: { key: a.id, run: JSON.stringify(run), catalog: JSON.stringify(a.run) },
         message: `${a.id}: run is ${JSON.stringify(run)}, the catalog documents ${JSON.stringify(a.run)}. This mod did not write it; it is left as is.`,
       });
     }
@@ -124,6 +136,8 @@ export function scan(programs, catalog, ownedKeys = []) {
           neighbor: other,
           reason: "typo",
           owned: true,
+          code: "typoOwned",
+          params: { key, run: JSON.stringify(run[0]), neighbor: other, other: JSON.stringify(otherRun[0]) },
           message: `${key}: run ${JSON.stringify(run[0])} looks like a typo of ${other} (run ${JSON.stringify(otherRun[0])}). Remove the typo only; ${other} is left as is.`,
         });
       } else {
@@ -134,6 +148,8 @@ export function scan(programs, catalog, ownedKeys = []) {
           key,
           neighbor: other,
           reason: "typo",
+          code: "typoUnowned",
+          params: { key, run: JSON.stringify(run[0]), neighbor: other, other: JSON.stringify(otherRun[0]) },
           message: `${key}: run ${JSON.stringify(run[0])} looks like a typo of ${other} (run ${JSON.stringify(otherRun[0])}). This mod did not write it; remove it by hand and leave ${other} as is.`,
         });
       }

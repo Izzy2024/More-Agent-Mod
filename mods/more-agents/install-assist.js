@@ -57,7 +57,9 @@ export function isRunnableInstall(text) {
 export function planInstall(agent) {
   const name = agent?.name ?? agent?.id ?? "the agent";
   if (!agent || typeof agent !== "object" || !isRunnableInstall(agent.install)) {
-    return { ok: false, error: `No install command that can run for ${name}.` };
+    // lane-i18n: `code` lets the dialog translate the reason; `error` keeps the
+    // English text the tests use.
+    return { ok: false, code: "no-install", name, error: `No install command that can run for ${name}.` };
   }
   const command = agent.install;
   const wrapped = `${command}; printf '\\n[finished - press Enter to close]\\n'; read _`;
