@@ -15,7 +15,8 @@ import { scanFound as scanFoundPaths } from "./path-scan.js"; // lane-fullpath
 import { LANGS, DEFAULT_LANG, copyFor } from "./copy.js";
 import { planBridge, runBridgePlan, repoRootFrom } from "./bridge-install.js"; // lane-bridge
 // lane-install: detected agents, the Install button's plan and the one install rule.
-import { detectedAgents, formatDetected, isRunnableInstall, planInstall } from "./install-assist.js";
+// lane-guided: the install prerequisites and the watcher that adds the entry.
+import { detectedAgents, formatDetected, isRunnableInstall, planInstall, missingTools, TOOL_HELP } from "./install-assist.js";
 // lane-path: ask the login shell, the way Herdr's + menu starts a program.
 import { INSTALL_TOOLS, probeBinaries } from "./path-probe.js";
 
@@ -28,6 +29,10 @@ const RESERVED = new Set(["shell", "program", "agent"]);
 const WINDOWS = /^[A-Za-z]:[\\/]/.test(home()) || home().includes("\\");
 const TILE = { tint: true, tile: "#1c1d21", color: "#ffffff" };
 const BRIDGES_DOCS = "https://github.com/Izzy2024/More-Agent-Mod/tree/main/bridges";
+// lane-guided: the install watcher checks every 5 s for at most 3 minutes. It
+// never runs the install: the tab opened by the confirm does.
+const WATCH_EVERY = 5000;
+const WATCH_LIMIT = 3 * 60 * 1000;
 // Paint order. Empty sections are skipped. "ships" starts collapsed.
 const SECTIONS = [
   { id: "ready", copyKey: "sectionReady" },
@@ -216,6 +221,10 @@ export default class MoreAgents extends View {
     this.selected = new Set();  // checked ids
     this.withContinue = false;
     this.busy = false;
+    // lane-guided: closed = no watcher may touch the dialog anymore; `watch` is
+    // the one install this dialog is waiting for, or null.
+    this.alive = true;
+    this.watch = null;
     this.say("info", "");
     // lane-i18n: the saved language, read once; the header switch writes it back.
     // The copy also drives the form placeholders, so they follow the language.
@@ -405,6 +414,9 @@ export default class MoreAgents extends View {
   // dialog does not do this.
   reload(cx) {
     if (this.busy) return false;
+    // lane-guided: pressing Re-check ends the guided wait; the re-check itself
+    // still shows whether the command is installed now.
+    this.stopWatch();
     const task = async (cx) => {
       await this.load();
       await this.detect();
@@ -849,8 +861,12 @@ export default class MoreAgents extends View {
   }
 
   // LANE-INSTALL: show the exact command; nothing runs before the confirm.
+  // lane-guided: if a tool the command needs is missing, say where to get it
+  // instead of offering an install that would fail in the new tab.
   previewInstall(a, cx) {
     if (this.busy || WINDOWS) return false;
+    const missing = missingTools(a.install, this.onPath);
+    if (missing.length) return this.explainMissing(a, missing, cx);
     const plan = planInstall(a);
     if (!plan.ok) { this.say("error", this.planError(plan)); cx?.notify?.(); return false; }
     const copy = this.copy ?? copyFor(DEFAULT_LANG);
@@ -891,6 +907,22 @@ export default class MoreAgents extends View {
     return true;
   }
 
+  // lane-guided: what is missing, in plain words, with the page where to get
+  // it. Nothing runs; the user installs the tool and comes back to Re-check.
+  explainMissing(a, missing, cx) {
+    const copy = this.copy ?? copyFor(DEFAULT_LANG);
+    const parts = (missing ?? []).map((m) => {
+      const help = TOOL_HELP[m.tool] ?? { id: m.tool, url: null };
+      const where = copy.toolWhere(help.id, help.url);
+      return m.python3Only
+        ? copy.toolNeedPython3(a.name, where)
+        : copy.toolNeed(a.name, copy.toolLabel(help.id), where);
+    });
+    this.say("warning", [...parts, copy.toolThenRecheck].join(" "));
+    cx?.notify?.();
+    return true;
+  }
+
   // lane-fullpath: the confirm's write. Add reuses addEntries; a repoint changes
   // only run[0] through edit() and refreshes that entry's fingerprint.
   applyFullPath(c, cx) {
@@ -927,6 +959,66 @@ export default class MoreAgents extends View {
         cx.notify();
       }
     });
+  }
+
+  // lane-guided: one watcher at a time. It only reads the install tools and
+  // re-detects; the tab that the confirm opened is the one doing the install.
+  startInstallWatch(a, cx) {
+    if (WINDOWS || !this.alive || !a || typeof a.run?.[0] !== "string") return false;
+    this.watch = { id: a.id, bin: a.run[0], deadline: Date.now() + WATCH_LIMIT };
+    this.scheduleWatch(cx, this.watch);
+    return true;
+  }
+
+  stopWatch() {
+    this.watch = null;
+  }
+
+  scheduleWatch(cx, watch) {
+    if (!watch || watch !== this.watch || !this.alive) return;
+    if (typeof cx?.timer?.after !== "function") { this.stopWatch(); return; }
+    // `after`, re-scheduled from the handler: the host has no repeating timer
+    // that this dialog can cancel, and a stale handler checks `this.watch`.
+    cx.timer.after(WATCH_EVERY, () => this.watchTick(cx, watch).catch(() => {}));
+  }
+
+  async watchTick(cx, watch) {
+    if (!this.alive || this.watch !== watch) return;
+    if (this.busy) { this.scheduleWatch(cx, watch); return; } // a save owns the dialog
+    const copy = this.copy ?? copyFor(DEFAULT_LANG);
+    const a = CATALOG.find((x) => x.id === watch.id);
+    if (Date.now() >= watch.deadline) {
+      this.stopWatch();
+      this.say("info", copy.installStillMissing(a?.name ?? watch.id));
+      cx?.notify?.();
+      return;
+    }
+    // Added by hand while the install ran: there is nothing left to add.
+    if (runOf(this.table?.programs?.[watch.id])) { this.stopWatch(); return; }
+    await this.detect();
+    if (!this.alive || this.watch !== watch) return;
+    if (this.onPath[watch.bin] === true && a) {
+      const started = this.addEntries(entries(a, this.withContinue), cx, (ok) => {
+        if (ok) this.say("success", copy.installDone(a.name));
+      });
+      if (started) { this.stopWatch(); return; }
+    }
+    this.scheduleWatch(cx, watch);
+  }
+
+  // lane-guided: the host's cleanup hook. It only ends the wait (a scheduled tick
+  // reads `this.alive` and stops); it must not close the overlay itself, because
+  // the host may be the one closing it.
+  async close(cx) {
+    this.alive = false;
+    this.stopWatch();
+    cx?.notify?.();
+  }
+
+  // The Close button and its keyboard activation: clean up, then close the overlay.
+  closeDialog(cx) {
+    this.close(cx);
+    closeOverlay(props().overlay);
   }
 
   addSelected(cx) {
@@ -1100,12 +1192,15 @@ export default class MoreAgents extends View {
     if (c.kind === "install") {
       this.moveFocus("add-selected", cx); // the confirm buttons are gone
       if (!overwrite) { this.say("info", copy.cancelled); cx.notify(); return; }
+      // lane-guided: the whole flow is POSIX (sh, login shell); never on Windows.
+      if (WINDOWS) { this.say("info", copy.cancelled); cx.notify(); return; }
       const a = CATALOG.find((x) => x.id === c.agentId);
       const plan = planInstall(a);
       if (!plan.ok) { this.say("error", this.planError(plan)); cx.notify(); return; }
       try {
         run("tab.new", { name: plan.name, argv: plan.argv });
-        this.say("info", copy.installStarted(a.name));
+        // lane-guided: wait for it instead of asking for a manual Re-check.
+        if (this.startInstallWatch(a, cx)) this.say("info", copy.installStarted(a.name));
       } catch (e) {
         this.say("error", copy.installTabFailed(errText(e)));
       }
@@ -1383,7 +1478,7 @@ export default class MoreAgents extends View {
     if (id === "add-selected") { this.addSelected(cx); return true; }
     if (id === "add-own") { this.toggleCustom(cx); return true; }
     if (id === "add-custom") { this.addCustom(cx); return true; }
-    if (id === "close") { closeOverlay(props().overlay); return true; }
+    if (id === "close") { this.closeDialog(cx); return true; }
     if (id === "reload") { this.reload(cx); return true; }
     if (id === "confirm-yes") { this.resolveConfirm(true, cx); return true; }
     if (id === "confirm-keep") { this.resolveConfirm(false, cx); return true; }
@@ -1484,8 +1579,17 @@ export default class MoreAgents extends View {
       actions.push(this.button(`bridge-${a.id}`, this.bridgeLabel(a), (cx) => this.previewBridge(a, cx), t));
     }
     // LANE-INSTALL: pointer-only too, and never on Windows (no `sh`).
+    // lane-guided: when the command needs a tool the computer lacks, the button
+    // says which one and only explains where to get it.
     if (!WINDOWS && a.status === "verified" && inst === false && isRunnableInstall(a.install)) {
-      actions.push(this.button(`install-${a.id}`, copy.install, (cx) => this.previewInstall(a, cx), t));
+      const missing = missingTools(a.install, this.onPath);
+      if (missing.length) {
+        const help = TOOL_HELP[missing[0].tool] ?? { id: missing[0].tool, url: null };
+        actions.push(this.button(`needs-${a.id}`, copy.needsTool(copy.toolLabel(help.id)),
+          (cx) => this.explainMissing(a, missing, cx), t));
+      } else {
+        actions.push(this.button(`install-${a.id}`, copy.install, (cx) => this.previewInstall(a, cx), t));
+      }
     }
     // lane-fullpath: pointer-only; only when the command exists in a usual folder.
     const fullPath = this.fullPathFor(a);
@@ -1594,7 +1698,7 @@ export default class MoreAgents extends View {
             .role("button").accessibility_label(lang === "en" ? "English" : "Español")
             .on_click((_e, cx) => { this.setLang(lang, cx); })
             .child(lang.toUpperCase())))
-          .child(this.button("close", c.close, () => closeOverlay(props().overlay), t))))
+          .child(this.button("close", c.close, (cx) => this.closeDialog(cx), t))))
       .child(div().text_size(11.5).text_color(t.muted).child(c.writes(this.path)))
       .when(Boolean(this.error), (el) => el.child(h_flex().flex_none().max_h(72).overflow_y_scrollbar().gap(8).items_center().p(8).rounded(6).bg(t.raised)
         .child(v_flex().flex_1().min_w(0).gap(2)
@@ -1671,7 +1775,7 @@ export default class MoreAgents extends View {
                 : this.confirm.kind === "bridge"
                   ? (this.confirm.action === "install" ? c.bridgeInstall
                     : this.confirm.action === "uninstall" ? c.bridgeRemove : c.dryRun)
-                  : this.confirm.kind === "install" ? c.install
+                  : this.confirm.kind === "install" ? c.installAdd
                     : this.confirm.kind === "fullpath" ? c.fullPath
                       : c.overwrite, (cx) => this.resolveConfirm(true, cx), t, true))
           .child(this.button("confirm-keep",

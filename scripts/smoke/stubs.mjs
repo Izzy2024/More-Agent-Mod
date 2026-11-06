@@ -15,8 +15,12 @@ export const Input = { new: () => chain() };
 export const InputState = { new: () => { let v = ""; const h = {}; return { value: () => v, set_value: (x) => { v = x; }, _set: (x) => { v = x; }, on: (e, f) => { h[e] = f; return true; }, _fire: (e) => h[e]?.({}, null), focused: false, focus() { this.focused = true; h.focus?.({}, null); } }; } };
 export const appHome = () => HOME, home = () => process.env.MA_SYS_HOME ?? "/home/u";
 const names = (v) => (v ?? "").split(/\s+/).filter(Boolean);
-const onPath = () => names(process.env.MA_ONPATH ?? "omp aider");
-const shOnPath = () => names(process.env.MA_SH_ONPATH ?? process.env.MA_ONPATH ?? "omp aider");
+// A normal machine has the tools an install command needs (lane-guided looks at
+// them); MA_TOOLS_MISSING=1 removes them for the tests that want the opposite.
+const TOOLS = ["npm", "python", "python3", "pip", "brew", "uv", "curl"];
+const withTools = (list) => (process.env.MA_TOOLS_MISSING === "1" ? list : [...list, ...TOOLS]);
+const onPath = () => withTools(names(process.env.MA_ONPATH ?? "omp aider"));
+const shOnPath = () => withTools(names(process.env.MA_SH_ONPATH ?? process.env.MA_ONPATH ?? "omp aider"));
 const shellPath = () => process.env.MA_SHELL ?? "/bin/zsh";
 const unquote = (q) => q.replace(/'\\''/g, "'");
 export const exec = async (c, a) => {
