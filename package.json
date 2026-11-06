@@ -2,6 +2,7 @@
   "name": "more-agents",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Herdr App mod that adds agents to the + menu",
   "license": "MIT",
   "scripts": {

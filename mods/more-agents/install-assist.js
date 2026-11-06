@@ -16,7 +16,9 @@ const SHAPES = [
   new RegExp(`^brew install ${PKG}(?: ${PKG})*$`),
   new RegExp(`^curl -(?:fsSL|LsSf) ${URL} \\| (?:sh|bash)$`),
 ];
-const BARE = new RegExp(`^${WORD}$`);
+// The documented `pip install aider-install && aider-install` runs the tool the
+// first command just installed: only a "<name>-install" word may follow `&&`.
+const BARE = new RegExp(`^${WORD}-install$`);
 
 const hasRun = (entry) => Array.isArray(entry?.run) && entry.run.length > 0;
 

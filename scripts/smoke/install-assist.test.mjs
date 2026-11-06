@@ -91,6 +91,8 @@ console.log("ok 2: formatDetected truncates");
     "brew install x | sh",
     "npm i -g x && rm -rf /",
     "python -m pip install x && aider-install && rm",
+    "pip install x && rm",
+    "pip install x && sh",
     "npm i -g x\ntouch pwned",
     null,
   ]) assert.equal(isRunnableInstall(command), false, `rejects ${JSON.stringify(command)}`);
@@ -141,7 +143,8 @@ console.log("ok 4: planInstall");
   const none = await boot({ programs: { omp: { run: ["omp"] }, aider: { run: ["aider"] } } });
   none.m.render();
   assert.ok(!none.m.shown.includes("button:add-detected"), "no detected agent, no Add all");
-  assert.ok(none.m.shown.includes("button:recheck"), "but a catalog agent is still missing");
+  assert.ok(!none.m.shown.some((s) => /not in your \+ menu/.test(s)), "and no banner line");
+  assert.ok(none.m.shown.includes("button:recheck"), "Re-check stays beside the search box");
 
   none.m.busy = true;
   none.m.render();

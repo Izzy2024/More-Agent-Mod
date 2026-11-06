@@ -66,7 +66,7 @@ const ES = {
   addOwn: "Añadir tu propio agente...",
   continueLabel: 'Añadir también la variante "continue" (si la tiene)',
   add: (n) => (n ? `Añadir ${n}` : "Añadir"),
-  hint: "Agente propio · Tab: búsqueda, continue, Add, este formulario, Remove, Close (sin vuelta) · ↓ desde la búsqueda, luego ↑/↓ y Espacio/Intro: agentes · Intro en el comando lo añade",
+  hint: "Agente propio · Tab: búsqueda, continue, Añadir, este formulario, Remove, Cerrar (sin vuelta) · ↓ desde la búsqueda, luego ↑/↓ y Espacio/Intro: agentes · Intro en el comando lo añade",
   key: "Clave",
   name: "Nombre visible",
   command: "Comando",

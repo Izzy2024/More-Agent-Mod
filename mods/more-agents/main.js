@@ -552,14 +552,6 @@ export default class MoreAgents extends View {
     return detectedAgents(CATALOG, this.table?.programs ?? {}, this.onPath);
   }
 
-  // lane-install: verified agents this dialog can install. Never on Windows: no `sh`.
-  installable() {
-    if (WINDOWS) return [];
-    return CATALOG.filter((a) => a.status === "verified"
-      && this.onPath[a.run?.[0]] === false
-      && isRunnableInstall(a.install));
-  }
-
   // lane-repair: applies ONE proposal after the existing confirm. The write still
   // goes through edit() (via writeEntry/remove), so CAS and backups are unchanged.
   askRepair(proposal, cx) {
@@ -1328,12 +1320,11 @@ export default class MoreAgents extends View {
     const ownFocused = this.focusedField === "add-own";
     const pv = this.runPreview();
     const n = this.selectable().length;
-    // LANE-INSTALL: the line shows while there is a detected agent or a catalog
-    // agent missing from this PATH, so Re-check is reachable in both cases.
+    // LANE-INSTALL: the banner line shows only while an installed agent is missing
+    // from the + menu. Re-check lives beside the search box, where the list is.
     const detected = this.detected();
-    const anyMissing = CATALOG.some((a) => a.status === "verified" && this.onPath[a.run?.[0]] === false);
-    const showInstall = !this.error && !this.busy
-      && (detected.length > 0 || this.installable().length > 0 || anyMissing);
+    const showDetected = !this.error && !this.busy && detected.length > 0;
+    const showRecheck = !this.error && !this.busy;
     const formOpen = this.formOpen();
     this.shown = [];
     this.note(formOpen ? "custom-form:open" : "custom-form:closed");
@@ -1382,18 +1373,17 @@ export default class MoreAgents extends View {
             .child(div().flex_1().min_w(0).text_size(11).text_color(p.kind === "warn" ? t.muted : p.kind === "remove" ? t.blocked : t.foreground).whitespace_normal().child(this.note(p.message)))
             .when(p.kind !== "warn", (row) => row.child(this.button(`repair-${p.key}`, p.kind === "remove" ? "Remove typo" : "Repair", (cx) => this.askRepair(p, cx), t, p.kind === "update"))))));
       })
-      // LANE-INSTALL: detected agents and Re-check, one compact line. Both
-      // buttons are pointer-only: lane C owns the dialog's Tab order.
-      .when(showInstall, (el) => el.child(h_flex().id("install-assist").flex_none().gap(8).items_center()
-        .when(detected.length > 0, (row) => row
-          .child(div().flex_1().min_w(0).truncate().text_size(11.5).text_color(t.muted).child(this.note(c.detected(detected.length, formatDetected(detected)))))
-          .child(this.button("add-detected", c.addAll, (cx) => this.addDetected(cx), t, true)))
-        .when(detected.length === 0, (row) => row.child(div().flex_1()))
-        .child(this.button("recheck", c.recheck, (cx) => this.reload(cx), t))))
+      // LANE-INSTALL: installed agents that are not in the + menu yet, one compact
+      // line. Add all is pointer-only: the dialog's Tab order stays short.
+      .when(showDetected, (el) => el.child(h_flex().id("install-assist").flex_none().gap(8).items_center()
+        .child(div().flex_1().min_w(0).truncate().text_size(11.5).text_color(t.muted).child(this.note(c.detected(detected.length, formatDetected(detected)))))
+        .child(this.button("add-detected", c.addAll, (cx) => this.addDetected(cx), t, true))))
       // LANE-CATALOG-SEARCH: the filter box sits above the list and narrows it
       // to the agents whose name, key or command matches. It is the first Tab stop.
       .child(h_flex().gap(6).items_center().flex_none()
-        .child(div().flex_1().min_w(0).tab_stop(true).child(field("search"))))
+        .child(div().flex_1().min_w(0).tab_stop(true).child(field("search")))
+        // LANE-INSTALL: Re-check after an install finishes (pointer-only).
+        .when(showRecheck, (row) => row.child(this.button("recheck", c.recheck, (cx) => this.reload(cx), t))))
       .child(v_flex().id("catalog").role("list_box").accessibility_label(c.agents).flex_1().min_h(0).overflow_y_scrollbar().pr(12).gap(1)
         .when(noMatch, (el) => el.child(div().p(8).text_size(12).text_color(t.muted).child(this.note(c.searchNoMatch))))
         .children(catalog))
