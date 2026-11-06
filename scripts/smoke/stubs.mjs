@@ -43,3 +43,5 @@ const sh = {}; export const shared = (k) => sh[k]; export const setShared = (k, 
 export const theme = () => new Proxy({}, { get: () => "#000000" });
 export const props = () => ({ overlay: "o1" }), closeOverlay = () => null;
 export const notes = []; export const notify = (n) => { notes.push(n); return "n"; };
+// lane-install: Herdr commands the dialog issues (tab.new). Nothing is spawned.
+export const ran = []; export const run = (name, args) => { ran.push({ name, args }); return null; };

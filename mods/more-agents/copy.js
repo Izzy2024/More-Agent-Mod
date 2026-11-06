@@ -37,6 +37,13 @@ const EN = {
   dryRun: "Run dry run",
   bridgeCatalog: (name, bridge, docs) => `Agents panel: ${name} needs the status bridge ${bridge} — see ${docs}.`,
   bridgeCustom: (docs) => `Agents panel: if it does not report OSC 7501, it needs a status bridge — see ${docs}.`,
+  // lane-install
+  install: "Install",
+  installConfirm: (name, command) => `Install ${name}? This runs in a new tab: ${command}`,
+  installStarted: (name) => `Installing ${name} in a new tab; press Re-check when it finishes.`,
+  detected: (n, list) => `${n} installed ${n === 1 ? "agent is" : "agents are"} not in your + menu: ${list}`,
+  addAll: "Add all",
+  recheck: "Re-check",
 };
 
 const ES = {
@@ -65,6 +72,13 @@ const ES = {
   dryRun: "Probar sin escribir",
   bridgeCatalog: (name, bridge, docs) => `Panel de agentes: ${name} necesita el bridge de estado ${bridge} — ver ${docs}.`,
   bridgeCustom: (docs) => `Panel de agentes: si no informa OSC 7501, necesita un bridge de estado — ver ${docs}.`,
+  // lane-install
+  install: "Instalar",
+  installConfirm: (name, command) => `¿Instalar ${name}? Se ejecuta en una pestaña nueva: ${command}`,
+  installStarted: (name) => `Instalando ${name} en una pestaña nueva; pulsa Volver a comprobar al terminar.`,
+  detected: (n, list) => `${n} ${n === 1 ? "agente instalado no está" : "agentes instalados no están"} en tu menú +: ${list}`,
+  addAll: "Añadir todos",
+  recheck: "Volver a comprobar",
 };
 
 export function copyFor(lang) {
