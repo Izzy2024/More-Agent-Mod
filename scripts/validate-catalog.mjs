@@ -67,7 +67,7 @@ for (const [i, e] of (Array.isArray(list) ? list : []).entries()) {
     else if (argv(e.run) && e.continue[0] !== e.run[0]) err(at, "continue must use the same binary as run");
   }
   if (e.install !== undefined && (typeof e.install !== "string" || !isRunnableInstall(e.install)))
-    err(at, 'install: only "npm i|install -g <pkg>", "pip install <pkg>", "brew install <pkg>" or "curl -fsSL|-LsSf https://<host>/<path> | sh|bash", joined by " && "');
+    err(at, 'install: only "npm i|install -g [--ignore-scripts] <pkg>", "uv tool install <pkg>", "pip install <pkg>", "brew install <pkg>" or "curl -fsSL|-LsSf https://<host>/<path> | sh|bash", joined by " && "');
   if (typeof e.docs !== "string" || !URL_RE.test(e.docs)) err(at, "docs: URL https");
   if (typeof e.source !== "string" || !URL_RE.test(e.source)) err(at, "source: https URL the command comes from");
   if (!STATUS.has(e.status)) err(at, `status: ${[...STATUS].join(" | ")}`);

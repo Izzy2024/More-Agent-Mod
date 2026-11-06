@@ -31,7 +31,7 @@ El catálogo es `mods/more-agents/catalog.js`. Tiene comentarios `//` arriba y d
    | `run` | sí | argv para arrancarlo en modo interactivo. `run[0]` es el binario. |
    | `match` | no | Otros nombres de proceso, o el `app=` que el agente reporta por OSC 7501. |
    | `continue` | no | argv para retomar la última sesión, con el mismo binario. **Solo si está documentado.** |
-   | `install` | no | Comando de instalación oficial. Si no hay uno, se muestra `docs`. El botón **Instalar** del diálogo lo ejecuta en una pestaña nueva tras confirmar, así que el validador solo acepta `npm i\|install -g <paquete>`, `pip install <paquete>`, `brew install <paquete>` y `curl -fsSL\|-LsSf https://<host>/<ruta> \| sh\|bash`, unidos con ` && `. Sin `sudo`, sin `;`, sin `http://`. |
+   | `install` | no | Comando de instalación oficial. Si no hay uno, se muestra `docs`. El botón **Instalar** del diálogo lo ejecuta en una pestaña nueva tras confirmar, así que el validador solo acepta `npm i\|install -g [--ignore-scripts] <paquete>`, `uv tool install <paquete>`, `pip install <paquete>`, `brew install <paquete>` y `curl -fsSL\|-LsSf https://<host>/<ruta> \| sh\|bash`, unidos con ` && `. Sin `sudo`, sin `;`, sin `http://`. |
    | `docs` | sí | URL https de la documentación. |
    | `icon` | sí | `icons/<nombre>.svg`, de los iconos que trae Herdr (`defaults/icons/` en herdr-app), o `mods/more-agents/icons/<nombre>.svg` para un icono propio del mod (licencia compatible). Si no hay uno del agente, usa `icons/agent.svg`. |
    | `status` | sí | `verified`: comando sacado de docs oficiales. `unverified`: se lista pero no se ofrece. `builtin`: Herdr ya lo trae con `run`. |

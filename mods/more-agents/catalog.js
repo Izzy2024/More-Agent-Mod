@@ -364,7 +364,7 @@ export default [
     "tier": "official",
     "source": "https://kiro.dev/docs/reference/cli-commands/",
     "checked": "2026-11-06",
-    "note": "`kiro-cli chat --resume` resumes the previous conversation in this directory."
+    "note": "`kiro-cli chat --resume` resumes the previous conversation in this directory. The curl installer is documented for macOS; on Linux or Windows follow the docs."
   },
   {
     "id": "nanocoder",
@@ -387,29 +387,6 @@ export default [
     "source": "https://github.com/Nano-Collective/nanocoder/blob/main/docs/getting-started/index.md",
     "checked": "2026-11-06",
     "note": "`--continue` resumes the most recent saved session in the current directory."
-  },
-  {
-    "id": "openhands",
-    "name": "OpenHands CLI",
-    "run": [
-      "openhands"
-    ],
-    "match": [
-      "openhands"
-    ],
-    "continue": [
-      "openhands",
-      "--resume",
-      "--last"
-    ],
-    "install": "curl -fsSL https://install.openhands.dev/install.sh | sh",
-    "docs": "https://docs.openhands.dev/openhands/usage/cli/installation",
-    "icon": "icons/agent.svg",
-    "status": "verified",
-    "tier": "official",
-    "source": "https://github.com/OpenHands/OpenHands-CLI/blob/main/README.md",
-    "checked": "2026-11-06",
-    "note": "Upstream says this CLI is no longer maintained. `--resume --last` resumes the latest conversation."
   },
   {
     "id": "pi",
