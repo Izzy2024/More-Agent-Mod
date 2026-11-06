@@ -81,6 +81,7 @@ console.log("ok 4: PATH badge is installed / not found / could not check");
   process.env.MA_FAIL_WRITE = "programs.json";
   m.addSelected(cx);
   assert.equal(m.busy, true, "save still in flight");
+  m.customOpen = true;
   m.render();
   assert.ok(m.shown.includes("Saving…"), "saving indicator");
   assert.ok(m.shown.includes("disabled:add-selected"));

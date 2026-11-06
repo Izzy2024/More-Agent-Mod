@@ -120,7 +120,12 @@ console.log("ok 6b: installed copy uses its own bridges/");
   await Promise.all(spawned.splice(0));
   m.render();
   assert.ok(m.shown.includes("button:bridge-command-code"), "Command Code row has Bridge");
-  assert.ok(m.shown.includes("button:bridge-cursor"), "the builtin cursor row reaches its bridge");
+  // Cursor is builtin, so its row sits in the "Ships with Herdr" section, which
+  // starts collapsed: the Bridge button is one click away, not on screen.
+  assert.ok(!m.shown.includes("button:bridge-cursor"), "collapsed builtin section hides the cursor row");
+  m.toggleSection("ships", cx);
+  m.render();
+  assert.ok(m.shown.includes("button:bridge-cursor"), "the builtin cursor row reaches its bridge once the section is open");
   assert.ok(!m.shown.includes("button:bridge-omp"), "rows without a bridge do not");
   assert.ok(!m.actionIds().includes("bridge-command-code"), "not a row action");
   assert.ok(!m.tabOrder().includes("bridge-command-code"), "not a Tab stop");

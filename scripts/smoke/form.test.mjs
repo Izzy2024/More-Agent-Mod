@@ -27,14 +27,16 @@ let stopped = 0;
 const kcx = { stop_propagation: () => { stopped++; }, notify: () => {} };
 const tab = (shift = false) => m.formKey({ key: "tab", modifiers: { shift } }, kcx);
 
-// 1. Focus starts in the key field, so the dialog is usable without a mouse.
-assert.equal(m.focusedField, "key", "initial focus on key");
+// 1. Focus starts in the search box, so the dialog is usable without a mouse.
+assert.equal(m.focusedField, "search", "initial focus on search");
+assert.equal(m.inputs.search.focused, true, "the search input was focused");
+assert.equal(m.customOpen, false, "the custom form starts collapsed");
 
-// Full, non-wrapping Tab order: key → name → run → continue → Add → Add custom →
-// Add continue (aider is in the file) → Close.
+// Collapsed form: search → continue → Add → disclosure → Add continue (aider
+// is in the file) → Close. The key/name/command stops are not in the order.
 const forward = [];
-for (let i = 0; i < 7; i++) { tab(); forward.push(m.focusedField); }
-assert.deepEqual(forward, ["name", "run", "continue", "add-selected", "add-custom", "add-continue-aider", "close"]);
+for (let i = 0; i < 5; i++) { tab(); forward.push(m.focusedField); }
+assert.deepEqual(forward, ["continue", "add-selected", "add-own", "add-continue-aider", "close"]);
 let before = stopped;
 tab();
 assert.equal(m.focusedField, "close", "Tab at the end does not wrap");
@@ -42,12 +44,25 @@ assert.equal(stopped, before, "Tab at the end leaves the form (no stop_propagati
 
 // Shift+Tab is the exact inverse, and also does not wrap at the start.
 const backward = [];
-for (let i = 0; i < 7; i++) { tab(true); backward.push(m.focusedField); }
-assert.deepEqual(backward, ["add-continue-aider", "add-custom", "add-selected", "continue", "run", "name", "key"]);
+for (let i = 0; i < 5; i++) { tab(true); backward.push(m.focusedField); }
+assert.deepEqual(backward, ["add-continue-aider", "add-own", "add-selected", "continue", "search"]);
 before = stopped;
 tab(true);
-assert.equal(m.focusedField, "key", "Shift+Tab at the start does not wrap");
+assert.equal(m.focusedField, "search", "Shift+Tab at the start does not wrap");
 assert.equal(stopped, before, "Shift+Tab at the start leaves the form");
+
+// Opened form inserts key → name → command → Add custom after the disclosure.
+m.customOpen = true;
+const expanded = [];
+for (let i = 0; i < 9; i++) { tab(); expanded.push(m.focusedField); }
+assert.deepEqual(expanded, ["continue", "add-selected", "add-own", "key", "name", "run", "add-custom", "add-continue-aider", "close"]);
+before = stopped;
+tab();
+assert.equal(m.focusedField, "close", "Tab at the end still does not wrap");
+assert.equal(stopped, before);
+for (let i = 0; i < 9; i++) tab(true);
+assert.equal(m.focusedField, "search");
+m.customOpen = false;
 
 // Keys that are not Tab pass through untouched.
 before = stopped;
@@ -61,13 +76,19 @@ assert.ok(m.selected.has("omp"), "Space selects a row");
 m.keyDown({ key: "enter", modifiers: {} }, kcx);
 assert.ok(!m.selected.has("omp"), "Enter toggles it back");
 
-// Rows are not Tab stops: Tab from a row continues after the command field.
+// Rows are not Tab stops: Tab from a row continues at continue, Shift+Tab at search.
 m.moveFocus("row-omp", kcx);
 tab();
 assert.equal(m.focusedField, "continue");
+m.moveFocus("row-omp", kcx);
+tab(true);
+assert.equal(m.focusedField, "search");
 
-// Arrow keys reach the rows from Add and move between them. The runtime names
-// them "down"/"up" (see the menu, picker and worktree mods), not "arrowdown".
+// Arrow Down from search lands on the first offered row. Up/Down from Add still
+// move between rows. The runtime names them "down"/"up", not "arrowdown".
+m.moveFocus("search", kcx);
+m.keyDown({ key: "down", modifiers: {} }, kcx);
+assert.equal(m.focusedField, "row-" + m.offeredIds()[0], "Down from search");
 m.moveFocus("add-selected", kcx);
 m.keyDown({ key: "down", modifiers: {} }, kcx);
 assert.equal(m.focusedField, "row-" + m.offeredIds()[0]);
@@ -93,7 +114,7 @@ m.resolveConfirm(false, kcx);
 assert.equal(m.confirm, null);
 assert.equal(m.focusedField, "add-selected", "focus returns to a live control");
 tab();
-assert.equal(m.focusedField, "add-custom", "Tab works after the confirm");
+assert.equal(m.focusedField, "add-own", "Tab works after the confirm");
 
 // A blur can leave no focus at all; keys must not crash or eat Tab.
 m.focusedField = null;
