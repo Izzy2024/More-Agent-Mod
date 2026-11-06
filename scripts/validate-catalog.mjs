@@ -25,7 +25,7 @@ if (!m) { console.error(`${file}: must be // comments followed by \`export defau
 let list;
 try { list = JSON.parse(m[1]); } catch (e) { console.error(`${file}: the body is not strict JSON: ${e.message}`); process.exit(1); }
 
-const KEYS = new Set(["id", "name", "run", "match", "continue", "install", "docs", "icon", "status", "source", "checked", "bridge", "note"]);
+const KEYS = new Set(["id", "name", "run", "match", "continue", "install", "docs", "icon", "status", "source", "checked", "bridge", "nativeOsc", "note"]);
 const STATUS = new Set(["verified", "unverified", "builtin"]);
 const ID = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 const URL_RE = /^https:\/\/\S+$/;
@@ -80,6 +80,9 @@ for (const [i, e] of (Array.isArray(list) ? list : []).entries()) {
     if (typeof e.bridge !== "string" || !/^bridges\/[a-z0-9._-]+$/.test(e.bridge)) err(at, 'bridge: "bridges/<id>"');
     else if (!existsSync(join(repoRoot, e.bridge, "install.mjs"))) err(at, `bridge ${e.bridge}/install.mjs does not exist`);
   }
+  if (e.nativeOsc !== undefined && typeof e.nativeOsc !== "boolean") err(at, "nativeOsc: true or false");
+  // The agent either reports OSC 7501 by itself or needs this repo's bridge.
+  if (e.nativeOsc === true && e.bridge !== undefined) err(at, "nativeOsc and bridge are mutually exclusive");
   if (e.note !== undefined && typeof e.note !== "string") err(at, "note: text");
   if (builtin && typeof e.id === "string") {
     const b = builtin[e.id];
