@@ -25,9 +25,12 @@ const testPath = `${binDir}:${slowDir}:${emptyDir}`;
 
 const realExec = (cmd, args) => {
   // The temporary PATH has no /bin, so `sh` itself is resolved absolutely.
+  // SHELL is empty on purpose: a login shell would rebuild PATH from
+  // /etc/zprofile and lose the temp dirs, so this test drives the `sh -c`
+  // fallback; path-probe.test.mjs covers the login shell with a temp HOME.
   const r = spawnSync(cmd === "sh" ? "/bin/sh" : cmd, args, {
     encoding: "utf8",
-    env: { ...process.env, PATH: testPath },
+    env: { ...process.env, PATH: testPath, SHELL: "" },
   });
   return { code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 };
