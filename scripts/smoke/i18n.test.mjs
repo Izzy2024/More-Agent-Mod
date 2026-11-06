@@ -99,7 +99,7 @@ console.log("ok 2: language persistence");
   m.addSelected(cx);
   await drain();
   assert.equal(m.msgLevel, "warning", "a pending install is a warning");
-  assert.match(m.msg, /^Añadido kilo; aparecerá en el menú \+ cuando `kilo` esté en tu PATH/);
+  assert.match(m.msg, /^Añadido kilo; aparecerá en el menú \+ cuando `kilo` esté instalado/);
   assert.match(m.msg, /npm install -g @kilocode\/cli/, "the catalog hint stays as is");
   assert.equal(notes.at(-1).body, "Añadidos 1; 1 necesita instalarse");
   noEnglish(m, "add with warning");
