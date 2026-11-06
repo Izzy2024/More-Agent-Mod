@@ -165,6 +165,39 @@ console.log("ok 5: builtin fixture");
 }
 console.log("ok 5b: bridge field");
 
+// 5c. install is not free text: only the commands the dialog may run.
+{
+  const good = [
+    "npm i -g x",
+    "npm install -g @scope/x@latest",
+    "pip install aider-chat",
+    "python -m pip install aider-install && aider-install",
+    "brew install goose",
+    "curl -fsSL https://example.com/install.sh | sh",
+    "curl -LsSf https://example.com/x.sh | bash",
+  ];
+  for (const [i, install] of good.entries()) {
+    const r = run("scripts/validate-catalog.mjs", [writeFixture(`install-ok-${i}`, { ...base, install })]);
+    assert.equal(r.status, 0, `${install}: ${r.out}`);
+  }
+  const bad = [
+    "sudo npm i -g x",
+    "npm i -g x; rm -rf /",
+    "curl http://example.com/install.sh | sh",
+    "npm i -g $(whoami)",
+    "npm i -g `id`",
+    "curl -fsSL https://example.com/x.sh | sh > /dev/null",
+    "brew install x | sh",
+    "npm i -g x && sudo rm -rf /",
+  ];
+  for (const [i, install] of bad.entries()) {
+    const r = run("scripts/validate-catalog.mjs", [writeFixture(`install-bad-${i}`, { ...base, install })]);
+    assert.notEqual(r.status, 0, `accepts ${install}`);
+    assert.match(r.out, /install:/, install);
+  }
+}
+console.log("ok 5c: install command rule");
+
 // 6. --dry-run writes nothing.
 const appHome = join(HOME, "app-home");
 {

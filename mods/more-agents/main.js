@@ -7,12 +7,14 @@
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { appHome, home, exec, readTextFile, writeTextFile, knownAgents, theme, props, closeOverlay, notify, shared, setShared } from "herdr";
+import { appHome, home, exec, readTextFile, writeTextFile, knownAgents, theme, props, closeOverlay, notify, shared, setShared, run } from "herdr";
 import CATALOG from "./catalog.js";
 import { scan } from "./repair.js"; // lane-repair
 // lane-catalog: dialog copy. English is the default; see copy.js.
 import { LANGS, DEFAULT_LANG, copyFor } from "./copy.js";
 import { planBridge, runBridgePlan, repoRootFrom } from "./bridge-install.js"; // lane-bridge
+// lane-install: detected agents, the Install button's plan and the one install rule.
+import { detectedAgents, formatDetected, isRunnableInstall, planInstall } from "./install-assist.js";
 
 const OWN = "more-agents.keys"; // key -> fingerprint of the entry this mod wrote
 const KEY_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
@@ -534,6 +536,19 @@ export default class MoreAgents extends View {
     }
   }
 
+  // lane-install: catalog agents already installed but absent from programs.json.
+  detected() {
+    return detectedAgents(CATALOG, this.table?.programs ?? {}, this.onPath);
+  }
+
+  // lane-install: verified agents this dialog can install. Never on Windows: no `sh`.
+  installable() {
+    if (WINDOWS) return [];
+    return CATALOG.filter((a) => a.status === "verified"
+      && this.onPath[a.run?.[0]] === false
+      && isRunnableInstall(a.install));
+  }
+
   // lane-repair: applies ONE proposal after the existing confirm. The write still
   // goes through edit() (via writeEntry/remove), so CAS and backups are unchanged.
   askRepair(proposal, cx) {
@@ -695,10 +710,30 @@ export default class MoreAgents extends View {
     return true;
   }
 
+  // LANE-INSTALL: show the exact command; nothing runs before the confirm.
+  previewInstall(a, cx) {
+    if (this.busy || WINDOWS) return false;
+    const plan = planInstall(a);
+    if (!plan.ok) { this.say("error", plan.error); cx?.notify?.(); return false; }
+    const copy = this.copy ?? copyFor(DEFAULT_LANG);
+    this.confirm = { kind: "install", agentId: a.id };
+    this.say("info", copy.installConfirm(a.name, plan.command));
+    this.moveFocus("confirm-keep", cx);
+    cx?.notify?.();
+    return true;
+  }
+
   addSelected(cx) {
     const ids = new Set(this.selectable());
     const pairs = CATALOG.filter((a) => ids.has(a.id)).flatMap((a) => entries(a, this.withContinue));
     if (!pairs.length) { this.say("warning", "Check at least one agent."); cx.notify(); return; }
+    this.addEntries(pairs, cx);
+  }
+
+  // lane-install: the banner's "Add all" reuses the same add path as the checkboxes.
+  addDetected(cx) {
+    const pairs = this.detected().flatMap((a) => entries(a, this.withContinue));
+    if (!pairs.length) { this.say("warning", "Nothing to add."); cx.notify(); return; }
     this.addEntries(pairs, cx);
   }
 
@@ -843,6 +878,22 @@ export default class MoreAgents extends View {
     const c = this.confirm;
     this.confirm = null;
     if (!c) return;
+    // LANE-INSTALL: only a confirmed install opens a tab; validate the command again.
+    if (c.kind === "install") {
+      this.moveFocus("add-selected", cx); // the confirm buttons are gone
+      if (!overwrite) { this.say("info", "Cancelled."); cx.notify(); return; }
+      const a = CATALOG.find((x) => x.id === c.agentId);
+      const plan = planInstall(a);
+      if (!plan.ok) { this.say("error", plan.error); cx.notify(); return; }
+      try {
+        run("tab.new", { name: plan.name, argv: plan.argv });
+        this.say("info", (this.copy ?? copyFor(DEFAULT_LANG)).installStarted(a.name));
+      } catch (e) {
+        this.say("error", `Could not open the install tab: ${errText(e)}.`);
+      }
+      cx.notify();
+      return;
+    }
     // LANE-BRIDGE-CONFIRM: a bridge plan runs its own dry-run argv only.
     if (c.kind === "bridge") {
       this.moveFocus("add-selected", cx); // the confirm buttons are gone
@@ -1076,6 +1127,7 @@ export default class MoreAgents extends View {
 
   row(a, t) {
     const { added, builtin, offer, inst, state, where, contKey, contAdded, canAddContinue } = this.rowFacts(a);
+    const copy = this.copy ?? copyFor(DEFAULT_LANG);
     this.note(`${a.name} :: ${state} :: ${where}`);
     const sel = this.selected.has(a.id);
     const rowId = `row-${a.id}`;
@@ -1088,6 +1140,10 @@ export default class MoreAgents extends View {
     // LANE-BRIDGE-BUTTON: pointer-only, so the keyboard order stays short.
     if (typeof a.bridge === "string" && a.bridge.startsWith("bridges/")) {
       actions.push(this.button(`bridge-${a.id}`, "Bridge", (cx) => this.previewBridge(a, cx), t));
+    }
+    // LANE-INSTALL: pointer-only too, and never on Windows (no `sh`).
+    if (!WINDOWS && a.status === "verified" && inst === false && isRunnableInstall(a.install)) {
+      actions.push(this.button(`install-${a.id}`, copy.install, (cx) => this.previewInstall(a, cx), t));
     }
     return h_flex().id(`row-${a.id}`).px(8).py(5).gap(10).items_center().rounded(8)
       .border_1().border_color(focused ? t.accent : t.popover)
@@ -1144,6 +1200,12 @@ export default class MoreAgents extends View {
     const contFocused = this.focusedField === "continue";
     const pv = this.runPreview();
     const n = this.selectable().length;
+    // LANE-INSTALL: the line shows while there is a detected agent or a catalog
+    // agent missing from this PATH, so Re-check is reachable in both cases.
+    const detected = this.detected();
+    const anyMissing = CATALOG.some((a) => a.status === "verified" && this.onPath[a.run?.[0]] === false);
+    const showInstall = !this.error && !this.busy
+      && (detected.length > 0 || this.installable().length > 0 || anyMissing);
     this.shown = [];
     const status = this.busy || Boolean(this.confirm) || Boolean(this.msg);
     return v_flex().size_full().bg(t.popover).p(14).gap(8).text_size(13)
@@ -1177,6 +1239,14 @@ export default class MoreAgents extends View {
             .child(div().flex_1().min_w(0).text_size(11).text_color(p.kind === "warn" ? t.muted : p.kind === "remove" ? t.blocked : t.foreground).whitespace_normal().child(this.note(p.message)))
             .when(p.kind !== "warn", (row) => row.child(this.button(`repair-${p.key}`, p.kind === "remove" ? "Remove typo" : "Repair", (cx) => this.askRepair(p, cx), t, p.kind === "update"))))));
       })
+      // LANE-INSTALL: detected agents and Re-check, one compact line. Both
+      // buttons are pointer-only: lane C owns the dialog's Tab order.
+      .when(showInstall, (el) => el.child(h_flex().id("install-assist").flex_none().gap(8).items_center()
+        .when(detected.length > 0, (row) => row
+          .child(div().flex_1().min_w(0).truncate().text_size(11.5).text_color(t.muted).child(this.note(c.detected(detected.length, formatDetected(detected)))))
+          .child(this.button("add-detected", c.addAll, (cx) => this.addDetected(cx), t, true)))
+        .when(detected.length === 0, (row) => row.child(div().flex_1()))
+        .child(this.button("recheck", c.recheck, (cx) => this.reload(cx), t))))
       // LANE-CATALOG-SEARCH: the filter box sits above the list and narrows it
       // to the agents whose name, key or command matches.
       .child(h_flex().gap(6).items_center().flex_none()
@@ -1218,10 +1288,11 @@ export default class MoreAgents extends View {
             this.confirm.kind === "remove" ? c.removeAnyway
               : this.confirm.kind === "path-missing" ? c.addAnyway
                 : this.confirm.kind === "bridge" ? c.dryRun
-                  : c.overwrite, (cx) => this.resolveConfirm(true, cx), t, true))
+                  : this.confirm.kind === "install" ? c.install
+                    : c.overwrite, (cx) => this.resolveConfirm(true, cx), t, true))
           .child(this.button("confirm-keep",
             this.confirm.kind === "remove" ? c.keep
-              : this.confirm.kind === "path-missing" || this.confirm.kind === "bridge" ? c.cancel
+              : this.confirm.kind === "path-missing" || this.confirm.kind === "bridge" || this.confirm.kind === "install" ? c.cancel
                 : c.keepAsIs, (cx) => this.resolveConfirm(false, cx), t))))
         .when(Boolean(this.msg) && !this.confirm, (e2) => e2.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : this.msgTone(t)).whitespace_normal().child(this.msg)))));
   }
