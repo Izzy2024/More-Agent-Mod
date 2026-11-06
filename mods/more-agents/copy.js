@@ -19,9 +19,14 @@ const EN = {
   reload: "Reload",
   search: "Search by name, key or command",
   searchNoMatch: "No agent matches that search.",
+  sectionReady: "Ready to add",
+  sectionInstall: "Needs install",
+  sectionAdded: "Already in your + menu",
+  sectionBuiltin: "Ships with Herdr",
+  addOwn: "Add your own agent...",
   continueLabel: 'Also add the "continue" variant (if it has one)',
   add: (n) => (n ? `Add ${n}` : "Add"),
-  hint: "Custom agent · Tab: fields and buttons · ↑/↓ then Space/Enter: agents · Enter in the command adds it",
+  hint: "Custom agent · Tab: search, continue, Add, this form, Remove, Close (no wrap) · ↓ from search, then ↑/↓ and Space/Enter: agents · Enter in the command adds it",
   key: "Key",
   name: "Display name",
   command: "Command",
@@ -37,6 +42,13 @@ const EN = {
   dryRun: "Run dry run",
   bridgeCatalog: (name, bridge, docs) => `Agents panel: ${name} needs the status bridge ${bridge} — see ${docs}.`,
   bridgeCustom: (docs) => `Agents panel: if it does not report OSC 7501, it needs a status bridge — see ${docs}.`,
+  // lane-install
+  install: "Install",
+  installConfirm: (name, command) => `Install ${name}? This runs in a new tab: ${command}`,
+  installStarted: (name) => `Installing ${name} in a new tab; press Re-check when it finishes.`,
+  detected: (n, list) => `${n} installed ${n === 1 ? "agent is" : "agents are"} not in your + menu: ${list}`,
+  addAll: "Add all",
+  recheck: "Re-check",
 };
 
 const ES = {
@@ -47,9 +59,14 @@ const ES = {
   reload: "Recargar",
   search: "Buscar por nombre, clave o comando",
   searchNoMatch: "Ningún agente coincide con esa búsqueda.",
+  sectionReady: "Listos para añadir",
+  sectionInstall: "Hay que instalarlos",
+  sectionAdded: "Ya están en tu menú +",
+  sectionBuiltin: "Vienen con Herdr",
+  addOwn: "Añadir tu propio agente...",
   continueLabel: 'Añadir también la variante "continue" (si la tiene)',
   add: (n) => (n ? `Añadir ${n}` : "Añadir"),
-  hint: "Agente propio · Tab: campos y botones · ↑/↓ y Espacio/Intro: agentes · Intro en el comando lo añade",
+  hint: "Agente propio · Tab: búsqueda, continue, Añadir, este formulario, Remove, Cerrar (sin vuelta) · ↓ desde la búsqueda, luego ↑/↓ y Espacio/Intro: agentes · Intro en el comando lo añade",
   key: "Clave",
   name: "Nombre visible",
   command: "Comando",
@@ -65,6 +82,13 @@ const ES = {
   dryRun: "Probar sin escribir",
   bridgeCatalog: (name, bridge, docs) => `Panel de agentes: ${name} necesita el bridge de estado ${bridge} — ver ${docs}.`,
   bridgeCustom: (docs) => `Panel de agentes: si no informa OSC 7501, necesita un bridge de estado — ver ${docs}.`,
+  // lane-install
+  install: "Instalar",
+  installConfirm: (name, command) => `¿Instalar ${name}? Se ejecuta en una pestaña nueva: ${command}`,
+  installStarted: (name) => `Instalando ${name} en una pestaña nueva; pulsa Volver a comprobar al terminar.`,
+  detected: (n, list) => `${n} ${n === 1 ? "agente instalado no está" : "agentes instalados no están"} en tu menú +: ${list}`,
+  addAll: "Añadir todos",
+  recheck: "Volver a comprobar",
 };
 
 export function copyFor(lang) {

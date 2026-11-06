@@ -167,17 +167,20 @@ console.log("ok R1.4: snippet has no cmd token");
 }
 console.log("ok R1.5: confirm + edit() applies one repair");
 
-// 6. A typo the mod did not write is proposed but never removed by the mod.
+// 6. A typo the mod did not write is a warning, never a Remove button.
 {
   const { m, cx, drain } = await boot({ programs: fixture(), own: {} });
-  const remove = m.scanRepairs().find((p) => p.kind === "remove");
-  assert.equal(remove.owned, false);
-  assert.equal(m.askRepair(remove, cx), false);
+  const typo = m.scanRepairs().find((p) => p.key === "empryro-agent");
+  assert.equal(typo?.kind, "warn", "no remove proposal without ownership");
+  assert.match(typo.message, /did not write it/);
+  assert.match(typo.message, /by hand/);
+  m.render();
+  assert.ok(!m.shown.includes("button:repair-empryro-agent"), "a warning has no button");
+  assert.equal(m.askRepair(typo, cx), false);
   await drain();
   assert.ok(read().programs["empryro-agent"], "unowned entry kept");
-  assert.match(m.msg, /did not write/i);
   assert.equal(m.confirm, null);
 }
-console.log("ok R1.6: the mod does not delete what it did not write");
+console.log("ok R1.6: an unowned typo is a warning, not a remove");
 
 console.log("repair.test: LANE-REPAIR OK");

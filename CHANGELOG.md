@@ -6,6 +6,11 @@
 - `programs.snippet.json` no longer matches `cmd`.
 - Catalog adds `dsh-tui` (OSC 7501 itself, so no bridge note). The list has a search box. "Add continue" is a Tab stop. The header can switch the chrome to Spanish; English stays the default. A checked agent hidden by the search is not added.
 - A catalog row with a `bridge` can run that bridge's installer as `--dry-run` after a confirm. The three installers print the file they would edit and write nothing.
+- The dialog opens on the search box, which is now the first Tab stop. Catalog rows are grouped into Ready to add, Needs install, Already in your + menu and Ships with Herdr (collapsed). The custom agent form sits behind "Add your own agent...".
+- A line lists installed catalog agents that are not in the + menu yet, with **Add all**. Missing agents get an **Install** button that runs the catalog command in a new tab only after you confirm the exact command. **Re-check** (beside the search box) refreshes detection. Catalog `install` strings are validated against an allowlist of command shapes (`npm`, `pip`, `brew`, `curl ... | sh`).
+- `npm install` no longer overwrites the installed mod: the manual installer is `npm run install:mod`. `package.json` is now `"type": "module"`.
+- The generated `gpui-kit.d.ts` is untracked and no longer installed (nor `jsconfig.json`). The installer also copies `bridges/` into the mod folder, so the Bridge button works from an installed copy and bridge hooks written from it survive deleting the clone. `install --uninstall` reminds you to remove a status bridge first.
+- A one-edit typo entry the mod did not write is a warning, not a "Remove typo" button that would refuse. The Cursor catalog row carries its `bridge`.
 
 ## 0.1.0
 

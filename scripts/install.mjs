@@ -10,7 +10,7 @@
 // Usage: node scripts/install.mjs [--home <app home>] [--dry-run] [--uninstall]
 import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
@@ -35,6 +35,10 @@ const uninstall = flag("--uninstall");
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..");
 const source = join(repo, "mods", "more-agents");
+// Herdr regenerates gpui-kit.d.ts on every run and jsconfig.json is editor
+// config: neither belongs in an installed copy.
+const NOT_INSTALLED = new Set(["gpui-kit.d.ts", "jsconfig.json"]);
+const bridges = join(repo, "bridges");
 const appHome = resolve(value("--home") ?? process.env.HERDR_APP_HOME ?? join(homedir(), ".config", "herdr-app"));
 const modsDir = join(appHome, "mods");
 const target = join(modsDir, "more-agents");
@@ -48,6 +52,7 @@ if (uninstall) {
   if (dryRun) { console.log(`Would remove ${target}`); process.exit(0); }
   rmSync(target, { recursive: true, force: true });
   console.log(`Removed ${target}`);
+  console.log("A status bridge must be removed first with node <checkout>/bridges/<id>/install.mjs --uninstall, or its hooks point at a deleted file.");
   console.log("programs.json and keys.json were not touched.");
   process.exit(0);
 }
@@ -66,10 +71,17 @@ let movedPrevious = false;
 try {
   mkdirSync(modsDir, { recursive: true });
   rmSync(staging, { recursive: true, force: true });
-  cpSync(source, staging, { recursive: true, errorOnExist: true });
+  cpSync(source, staging, {
+    recursive: true,
+    errorOnExist: true,
+    filter: (path) => !NOT_INSTALLED.has(basename(path)),
+  });
   if (!existsSync(join(staging, "mod.json")) || existsSync(join(staging, "more-agents"))) {
     throw new Error("staged copy has an unexpected layout");
   }
+  // The dialog finds a bridge next to main.js, so the installed copy needs the
+  // whole folder. Nothing in it is run here.
+  cpSync(bridges, join(staging, "bridges"), { recursive: true, errorOnExist: true });
   if (existsSync(target)) {
     rmSync(backup, { recursive: true, force: true });
     renameSync(target, backup);

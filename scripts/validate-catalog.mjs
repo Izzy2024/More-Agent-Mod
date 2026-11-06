@@ -5,6 +5,8 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+// The dialog runs `install` now, so both sides share one rule (lane-install).
+import { isRunnableInstall } from "../mods/more-agents/install-assist.js";
 
 const args = process.argv.slice(2);
 const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args.splice(i, 2)[1] : null; };
@@ -63,7 +65,8 @@ for (const [i, e] of (Array.isArray(list) ? list : []).entries()) {
     if (!argv(e.continue)) err(at, "continue: non-empty argument list");
     else if (argv(e.run) && e.continue[0] !== e.run[0]) err(at, "continue must use the same binary as run");
   }
-  if (e.install !== undefined && (typeof e.install !== "string" || !e.install.trim())) err(at, "install: text");
+  if (e.install !== undefined && (typeof e.install !== "string" || !isRunnableInstall(e.install)))
+    err(at, 'install: only "npm i|install -g <pkg>", "pip install <pkg>", "brew install <pkg>" or "curl -fsSL|-LsSf https://<host>/<path> | sh|bash", joined by " && "');
   if (typeof e.docs !== "string" || !URL_RE.test(e.docs)) err(at, "docs: URL https");
   if (typeof e.source !== "string" || !URL_RE.test(e.source)) err(at, "source: https URL the command comes from");
   if (!STATUS.has(e.status)) err(at, `status: ${[...STATUS].join(" | ")}`);

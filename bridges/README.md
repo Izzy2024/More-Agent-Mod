@@ -2,7 +2,7 @@
 
 Optional hooks that report an agent's state to Herdr. An agent that does not write [OSC 7501](#osc-7501) itself gets a small adapter. Every adapter calls the same emitter, `bridges/lib/herdr-osc.sh`.
 
-The More agents mod does not run anything in this folder. `scripts/install.mjs` only copies the mod. Adding a row to `programs.json` does not register hooks. You install an adapter yourself, from a checkout, after reading it.
+The More agents mod does not run anything in this folder. `scripts/install.mjs` copies the mod and this folder into the app home and runs nothing here. Adding a row to `programs.json` does not register hooks. You install an adapter yourself, from a checkout or from the installed copy, after reading it.
 
 ## The + menu and the Agents panel
 
@@ -84,7 +84,7 @@ node bridges/<id>/install.mjs --uninstall
 
 That removes hooks whose command runs `herdr-osc.sh` with that adapter's app id, on any event, and leaves the rest of the file. For Command Code it also removes those commands' fingerprints from `~/.commandcode/trusted-hooks.json` and leaves every other fingerprint. It does not remove the More agents mod. When a file changes, the installer refreshes that adapter's backup of that file first.
 
-Deleting the checkout, or moving it, stops reports: the hook command points at `bridges/lib/herdr-osc.sh` inside that checkout. Run the installer again from the new path.
+The hook command points at the `bridges/lib/herdr-osc.sh` of the folder the installer ran from. An adapter installed from the copy under `~/.config/herdr-app/mods/more-agents/bridges/` keeps working if the checkout is deleted or moved. One installed from a checkout stops reporting when that checkout is deleted or moved: run the installer again from the new path.
 
 ## Empryo
 

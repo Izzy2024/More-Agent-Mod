@@ -43,7 +43,7 @@ scripts/
   install.mjs                copia/actualiza/desinstala el mod en la carpeta de la app
   smoke-test.mjs             prueba la lógica de main.js con stubs (sin UI)
   smoke/                     stubs y *.test.mjs (un sandbox por archivo)
-package.json                 npm run validate | test | check | install
+package.json                 npm run validate | test | check | install:mod
 .github/workflows/ci.yml     valida + smoke en Linux y macOS, node 22
 ```
 
@@ -57,7 +57,7 @@ Los mensajes llevan nivel (error, warning, success, info) y se pintan según él
 
 El panel **Agents** es otra lista: solo muestra terminales que reportan OSC 7501. Los que reportan nativo (omp, OpenCode, Claude Code, Codex) no necesitan nada; para el resto, `bridges/` en este repo trae adaptadores opt-in (Cursor, Command Code, Empryo) que se fusionan en los hooks de ese agente con backup y `--uninstall`. Una fila del catálogo que lo necesita lleva `bridge` y el diálogo lo dice al añadirla. El mod nunca instala un puente por su cuenta.
 
-Teclado: el foco empieza en el campo de clave del formulario propio. Tab y Shift+Tab van clave → nombre → comando → continue → Add → Add custom → los botones Remove/Remove continue de los agentes añadidos → Reload (solo si el archivo está roto) → Close, y no dan la vuelta. En el catálogo, ↑/↓ mueven entre agentes y Espacio/Enter los marcan; Espacio/Enter también conmutan continue y los botones. Los comandos se parten como un programa, no como un shell: comillas simples y dobles agrupan y solo `\"` y `\\` escapan, así que las rutas entre comillas sobreviven; una comilla sin cerrar es un error. El formulario propio no escribe `match` (Herdr lo deriva de `run[0]`), y se rechazan las claves `shell`, `program`, `agent` y cualquiera que acabe en `-continue`. Si el comando no está en el PATH, el diálogo pregunta antes de guardarlo: la entrada no sale en el menú + hasta que ese comando exista, así una errata no desaparece en silencio.
+Teclado: el foco empieza en el cuadro de búsqueda. Tab y Shift+Tab van búsqueda → continue → Add → "Añadir tu propio agente" → (solo con ese formulario abierto) clave → nombre → comando → Add custom → los botones Remove/Remove continue y Add continue de los agentes añadidos → Reload (solo si el archivo está roto) → Close, y no dan la vuelta. Flecha abajo desde la búsqueda va a la primera fila del catálogo que se puede añadir; ↑/↓ mueven entre esas filas y Espacio/Enter las marcan. Espacio/Enter también conmutan continue, "Añadir tu propio agente" y los botones. Las cabeceras de sección se pliegan con un clic y no son paradas de Tab. Los comandos se parten como un programa, no como un shell: comillas simples y dobles agrupan y solo `\"` y `\\` escapan, así que las rutas entre comillas sobreviven; una comilla sin cerrar es un error. El formulario propio no escribe `match` (Herdr lo deriva de `run[0]`), y se rechazan las claves `shell`, `program`, `agent` y cualquiera que acabe en `-continue`. Si el comando no está en el PATH, el diálogo pregunta antes de guardarlo: la entrada no sale en el menú + hasta que ese comando exista, así una errata no desaparece en silencio.
 
 ## Probar en local
 

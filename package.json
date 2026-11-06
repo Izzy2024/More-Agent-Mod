@@ -2,12 +2,13 @@
   "name": "more-agents",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Herdr App mod that adds agents to the + menu",
   "license": "MIT",
   "scripts": {
     "validate": "node scripts/validate-catalog.mjs",
     "test": "node scripts/smoke-test.mjs",
     "check": "npm run validate && npm test",
-    "install": "node scripts/install.mjs"
+    "install:mod": "node scripts/install.mjs"
   }
 }

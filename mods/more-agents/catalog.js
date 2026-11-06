@@ -310,7 +310,8 @@ export default [
     "docs": "https://cursor.com/cli",
     "icon": "icons/cursor.svg",
     "status": "builtin",
-    "source": "https://github.com/herdrdev/herdr-app/blob/main/defaults/programs.json"
+    "source": "https://github.com/herdrdev/herdr-app/blob/main/defaults/programs.json",
+    "bridge": "bridges/cursor"
   },
   {
     "id": "amp",
