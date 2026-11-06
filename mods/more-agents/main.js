@@ -729,8 +729,8 @@ export default class MoreAgents extends View {
     return st ? (st.installed ? c.bridgeRemove : c.bridgeInstall) : c.bridge;
   }
 
-  // LANE-BRIDGE-PREVIEW: show the installer plan; nothing runs before confirm.
-  // A known status offers install or remove; unknown keeps the plain dry run.
+  // LANE-BRIDGE-PREVIEW: a known status runs the read-only dry run on the click
+  // and offers install or remove in the confirm; unknown keeps the plain dry run.
   previewBridge(a, cx) {
     if (this.busy || WINDOWS) return false;
     this.confirm = null;
@@ -743,15 +743,20 @@ export default class MoreAgents extends View {
         const status = this.bridgeStatus[a.id] ?? null;
         const action = status ? (status.installed ? "uninstall" : "install") : null;
         let runPlan = null;
+        let summary = plan.summary;
         if (action) {
           runPlan = await planBridge(a, { repoRoot, action, fileExists });
           if (!runPlan.ok) { this.say("error", runPlan.error); return; }
+          // The click only runs --dry-run; the real action needs the confirm.
+          const dry = await runBridgePlan(plan, { exec: this.bridgeExec });
+          if (!dry.ok) { this.say("error", dry.error); return; }
+          summary = dry.text;
         }
         const copy = this.copy ?? copyFor(DEFAULT_LANG);
         const file = status?.file ?? plan.script;
         const command = (runPlan ?? plan).argv.join(" ");
         this.confirm = { kind: "bridge", agentId: a.id, plan, runPlan, action };
-        this.say("info", copy.bridgePrompt(action ?? "preview", a.name, file, command, plan.summary));
+        this.say("info", copy.bridgePrompt(action ?? "preview", a.name, file, command, summary));
         this.moveFocus("confirm-keep", cx);
       } catch (e) {
         this.say("error", `Could not prepare the bridge install: ${errText(e)}. Nothing was run.`);

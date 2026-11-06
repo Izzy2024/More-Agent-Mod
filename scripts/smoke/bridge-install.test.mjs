@@ -222,7 +222,8 @@ console.log("ok 8: one argv per action and strict status parsing");
   assert.deepEqual(m.confirm.runPlan.argv, ["node", installer]);
   assert.match(m.msg, /Hook file: \/tmp\/cc-hooks\.json/);
   assert.match(m.msg, /Command: node .*install\.mjs/);
-  assert.equal(calls.length, 0, "the preview only plans; nothing runs before the confirm");
+  assert.equal(calls.length, 1, "the click runs only the read-only dry run");
+  assert.deepEqual(calls[0].args, [installer, "--dry-run"]);
   assert.equal(realCalls().length, 0, "no real action before the confirm");
 
   m.resolveConfirm(false, cx);
