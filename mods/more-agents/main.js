@@ -10,6 +10,7 @@ import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { appHome, home, exec, readTextFile, writeTextFile, knownAgents, theme, props, closeOverlay, notify, shared, setShared, run } from "herdr";
 import CATALOG from "./catalog.js";
 import { scan } from "./repair.js"; // lane-repair
+import { scanFound as scanFoundPaths } from "./path-scan.js"; // lane-fullpath
 // lane-catalog: dialog copy. English is the default; see copy.js.
 import { LANGS, DEFAULT_LANG, copyFor } from "./copy.js";
 import { planBridge, runBridgePlan, repoRootFrom } from "./bridge-install.js"; // lane-bridge
@@ -223,6 +224,8 @@ export default class MoreAgents extends View {
     this.errorArgs = null;
     this.loadGen = 0;           // ignores an older load that finishes late
     this.onPath = {};           // binary -> is on the PATH
+    // lane-fullpath: bin -> absolute path found in a usual folder when onPath is false.
+    this.foundAt = {};
     this.selected = new Set();  // checked ids
     this.withContinue = false;
     this.busy = false;
@@ -292,7 +295,7 @@ export default class MoreAgents extends View {
     // can land before the dialog exists.
     if (typeof cx.timer?.after === "function") cx.timer.after(600, () => this.inputs.search.focus());
     this.inputs.run.on("submit", (_e, cx) => this.addCustom(cx));
-    cx.spawn(async (cx) => { await this.load(); cx.notify(); await this.detect(); cx.notify(); await this.checkBridges(); cx.notify(); });
+    cx.spawn(async (cx) => { await this.load(); cx.notify(); await this.detect(); await this.scanFound(); cx.notify(); await this.checkBridges(); cx.notify(); });
   }
 
   async load() {
@@ -379,7 +382,8 @@ export default class MoreAgents extends View {
   async detect() {
     // Catalog + custom agents this mod added.
     const custom = this.ours().map((k) => runOf(this.table?.programs?.[k])?.[0]).filter((b) => typeof b === "string" && b);
-    const bins = [...new Set([...CATALOG.filter((a) => a.status !== "unverified").map((a) => a.run[0]), ...custom])];
+    // lane-fullpath: an entry can already point at an absolute path, so probe it too.
+    const bins = [...new Set([...CATALOG.filter((a) => a.status !== "unverified").map((a) => a.run[0]), ...CATALOG.map((a) => runOf(this.table?.programs?.[a.id])?.[0]), ...custom].filter((b) => typeof b === "string" && b))];
     try {
       if (WINDOWS) {
         for (const b of bins) this.onPath[b] = (await exec("where", [b]).catch(() => ({ code: 1 }))).code === 0;
@@ -391,6 +395,16 @@ export default class MoreAgents extends View {
     } catch { this.onPath = {}; /* shown as unknown, not as the previous answer */ }
     // The interactive shell may have a different PATH (mise, nvm…): what Herdr already knows wins.
     try { for (const a of await knownAgents()) if (a.installed) this.onPath[a.run[0]] = true; } catch {}
+  }
+
+  // lane-fullpath: look in the usual per-user folders for the commands detect()
+  // could not see. Read-only, replaces the whole map; Windows gets nothing.
+  async scanFound() {
+    this.foundAt = {};
+    if (WINDOWS) return;
+    const bins = Object.keys(this.onPath).filter((bin) => this.onPath[bin] === false);
+    if (!bins.length) return;
+    this.foundAt = await scanFoundPaths(bins, { exec, home: home(), windows: WINDOWS });
   }
 
   // The banner names the failure. The sentence under it is load()'s own text,
@@ -410,6 +424,7 @@ export default class MoreAgents extends View {
     const task = async (cx) => {
       await this.load();
       await this.detect();
+      await this.scanFound();
       await this.checkBridges();
       cx?.notify?.();
     };
@@ -459,6 +474,12 @@ export default class MoreAgents extends View {
     return CATALOG.find((a) => a.id === base) ?? null;
   }
 
+  // lane-fullpath: the command the menu will really run. An entry that already
+  // points at an absolute path wins over the catalog's bare name.
+  binOfAgent(a) {
+    return runOf(this.table?.programs?.[a.id])?.[0] ?? a?.run?.[0] ?? null;
+  }
+
   // Only checked agents that can still be added count.
   selectable() {
     return [...this.selected].filter((id) => {
@@ -481,7 +502,10 @@ export default class MoreAgents extends View {
   // added agent whose command is not on the PATH doesn't show until it's installed.
   addedMessage(keys) {
     const c = this.copy ?? copyFor(DEFAULT_LANG);
-    const binOf = (k) => runOf(this.table?.programs?.[k])?.[0] ?? k;
+    const binOf = (k) => {
+      const a = this.agentOf(k);
+      return (a ? this.binOfAgent(a) : runOf(this.table?.programs?.[k])?.[0]) ?? k;
+    };
     const ready = keys.filter((k) => this.onPath[binOf(k)] === true);
     const later = keys.filter((k) => this.onPath[binOf(k)] !== true);
     const parts = [];
@@ -853,6 +877,74 @@ export default class MoreAgents extends View {
     return true;
   }
 
+  // lane-fullpath: the exact file the menu should run, when the dialog can offer
+  // it. Only a row whose name the short PATH missed, and only an entry this mod
+  // wrote, may be pointed at it.
+  fullPathFor(a) {
+    if (WINDOWS) return null;
+    const bin = this.binOfAgent(a);
+    const path = bin ? this.foundAt?.[bin] : null;
+    if (!bin || typeof path !== "string" || this.onPath[bin] !== false) return null;
+    const entry = this.table?.programs?.[a.id];
+    if (runOf(entry)) {
+      if (this.own()[a.id] === undefined || bin.includes("/") || bin.includes("\\")) return null;
+      return { action: "update", key: a.id, name: a.name, bin, path };
+    }
+    if (a.status !== "verified") return null;
+    return { action: "add", key: a.id, name: a.name, bin, path };
+  }
+
+  // lane-fullpath: show the exact file; nothing is written before the confirm.
+  previewFullPath(a, cx) {
+    if (this.busy) return false;
+    const target = this.fullPathFor(a);
+    if (!target) return false;
+    const copy = this.copy ?? copyFor(DEFAULT_LANG);
+    this.confirm = { kind: "fullpath", ...target };
+    this.say("info", target.action === "add" ? copy.fullPathAddQuestion(a.name, target.path) : copy.fullPathChangeQuestion(a.name, target.path));
+    this.moveFocus("confirm-keep", cx);
+    cx?.notify?.();
+    return true;
+  }
+
+  // lane-fullpath: the confirm's write. Add reuses addEntries; a repoint changes
+  // only run[0] through edit() and refreshes that entry's fingerprint.
+  applyFullPath(c, cx) {
+    const copy = this.copy ?? copyFor(DEFAULT_LANG);
+    if (c.action === "add") {
+      const a = CATALOG.find((x) => x.id === c.key);
+      if (!a) { this.say("warning", copy.fullPathGone(c.name)); cx?.notify?.(); return; }
+      const entry = { name: a.name, icon: a.icon, ...TILE, ...(a.match ? { match: a.match } : {}), run: [c.path, ...a.run.slice(1)] };
+      this.addEntries([[a.id, entry]], cx);
+      return;
+    }
+    this.busy = true;
+    cx.spawn(async (cx) => {
+      try {
+        const r = await this.edit((p) => {
+          const entry = p[c.key];
+          const own = this.own();
+          if (!isObject(entry) || !runOf(entry) || own[c.key] === undefined) return { changed: [], skipped: [] };
+          const next = { ...entry, run: [c.path, ...runOf(entry).slice(1)] };
+          p[c.key] = next;
+          own[c.key] = fingerprint(next);
+          return { changed: [c.key], skipped: [], own };
+        });
+        if (r && r.changed.length) {
+          await this.detect();
+          this.say("success", copy.fullPathUpdated(c.name, c.path));
+        } else if (r) {
+          this.say("warning", copy.fullPathGone(c.name));
+        }
+      } catch (e) {
+        this.say("error", copy.saveFailed(c.key, errText(e)));
+      } finally {
+        this.busy = false;
+        cx.notify();
+      }
+    });
+  }
+
   addSelected(cx) {
     const ids = new Set(this.selectable());
     const pairs = CATALOG.filter((a) => ids.has(a.id)).flatMap((a) => entries(a, this.withContinue));
@@ -1013,6 +1105,13 @@ export default class MoreAgents extends View {
     const copy = this.copy ?? copyFor(DEFAULT_LANG);
     this.confirm = null;
     if (!c) return;
+    // lane-fullpath: one branch for both actions; only the confirm writes.
+    if (c.kind === "fullpath") {
+      this.moveFocus("add-selected", cx); // the confirm buttons are gone
+      if (!overwrite) { this.say("info", copy.cancelled); cx.notify(); return; }
+      this.applyFullPath(c, cx);
+      return;
+    }
     // LANE-INSTALL: only a confirmed install opens a tab; validate the command again.
     if (c.kind === "install") {
       this.moveFocus("add-selected", cx); // the confirm buttons are gone
@@ -1133,7 +1232,7 @@ export default class MoreAgents extends View {
     if (a.status === "builtin" || a.status === "unverified") return "ships";
     if (a.status !== "verified") return "ships";
     if (runOf(this.table?.programs?.[a.id])) return "added";
-    return this.onPath[a.run?.[0]] === true ? "ready" : "install";
+    return this.onPath[this.binOfAgent(a)] === true ? "ready" : "install";
   }
 
   sectionOpen(id, q) {
@@ -1360,7 +1459,7 @@ export default class MoreAgents extends View {
     const canAddContinue = this.canAddContinue(a);
     const builtin = a.status === "builtin";
     const offer = a.status === "verified" && !added && !yours;
-    const inst = this.onPath[a.run?.[0]];
+    const inst = this.onPath[this.binOfAgent(a)];
     const pathBadge = inst === true ? c.installed : inst === false ? c.notFoundPath : c.couldNotCheck;
     const state = builtin ? c.shipsBuiltin
       : added ? (inst === true ? c.inPlusMenu : inst === false ? c.addedNotInstalled : c.couldNotCheck)
@@ -1397,6 +1496,9 @@ export default class MoreAgents extends View {
     if (!WINDOWS && a.status === "verified" && inst === false && isRunnableInstall(a.install)) {
       actions.push(this.button(`install-${a.id}`, copy.install, (cx) => this.previewInstall(a, cx), t));
     }
+    // lane-fullpath: pointer-only; only when the command exists in a usual folder.
+    const fullPath = this.fullPathFor(a);
+    if (fullPath) actions.push(this.button(`fullpath-${a.id}`, copy.fullPath, (cx) => this.previewFullPath(a, cx), t));
     return h_flex().id(`row-${a.id}`).px(8).py(5).gap(10).items_center().rounded(8)
       .border_1().border_color(focused ? t.accent : t.popover)
       .role("list_box_option").aria_selected(sel)
@@ -1579,10 +1681,11 @@ export default class MoreAgents extends View {
                   ? (this.confirm.action === "install" ? c.bridgeInstall
                     : this.confirm.action === "uninstall" ? c.bridgeRemove : c.dryRun)
                   : this.confirm.kind === "install" ? c.install
-                    : c.overwrite, (cx) => this.resolveConfirm(true, cx), t, true))
+                    : this.confirm.kind === "fullpath" ? c.fullPath
+                      : c.overwrite, (cx) => this.resolveConfirm(true, cx), t, true))
           .child(this.button("confirm-keep",
             this.confirm.kind === "remove" ? c.keep
-              : this.confirm.kind === "path-missing" || this.confirm.kind === "bridge" || this.confirm.kind === "install" ? c.cancel
+              : this.confirm.kind === "path-missing" || this.confirm.kind === "bridge" || this.confirm.kind === "install" || this.confirm.kind === "fullpath" ? c.cancel
                 : c.keepAsIs, (cx) => this.resolveConfirm(false, cx), t))))
         .when(Boolean(this.msg) && !this.confirm, (e2) => e2.child(div().text_size(11.5).text_color(this.invalidField ? t.blocked : this.msgTone(t)).whitespace_normal().child(this.msg)))));
   }

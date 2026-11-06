@@ -27,6 +27,12 @@ const EN = {
   addOwn: "Add your own agent...",
   // lane-catalog2
   community: "community",
+  // lane-fullpath
+  fullPath: "Use full path",
+  fullPathAddQuestion: (name, path) => `Add ${name} using ${path}?`,
+  fullPathChangeQuestion: (name, path) => `Change ${name} to run ${path}?`,
+  fullPathUpdated: (name, path) => `${name} now runs ${path}.`,
+  fullPathGone: (name) => `${name} is not in your programs.json any more; nothing was written.`,
   continueLabel: 'Also add the "continue" variant (if it has one)',
   add: (n) => (n ? `Add ${n}` : "Add"),
   hint: "Custom agent · Tab: search, continue, Add, this form, Remove, Close (no wrap) · ↓ from search, then ↑/↓ and Space/Enter: agents · Enter in the command adds it",
@@ -157,6 +163,12 @@ const ES = {
   addOwn: "Añadir tu propio agente...",
   // lane-catalog2
   community: "comunidad",
+  // lane-fullpath
+  fullPath: "Usar ruta completa",
+  fullPathAddQuestion: (name, path) => `¿Añadir ${name} usando ${path}?`,
+  fullPathChangeQuestion: (name, path) => `¿Cambiar ${name} para que ejecute ${path}?`,
+  fullPathUpdated: (name, path) => `${name} ahora ejecuta ${path}.`,
+  fullPathGone: (name) => `${name} ya no está en tu programs.json; no se escribió nada.`,
   continueLabel: 'Añadir también la variante "continue" (si la tiene)',
   add: (n) => (n ? `Añadir ${n}` : "Añadir"),
   hint: "Agente propio · Tab: búsqueda, continue, Añadir, este formulario, Remove, Cerrar (sin vuelta) · ↓ desde la búsqueda, luego ↑/↓ y Espacio/Intro: agentes · Intro en el comando lo añade",
