@@ -62,7 +62,7 @@ console.log("ok 2: formatDetected truncates");
 // 3. The one rule: every shipped install string passes; shell tricks do not.
 {
   const shipped = CATALOG.filter((a) => a.install !== undefined).map((a) => a.install);
-  assert.equal(shipped.length, 13, "the verified catalog entries with an install");
+  assert.equal(shipped.length, 19, "the verified catalog entries with an install");
   for (const command of shipped) assert.ok(isRunnableInstall(command), `shipped: ${command}`);
 
   for (const command of [
@@ -108,7 +108,7 @@ console.log("ok 3: install-command rule");
   assert.equal(plan.name, "Install Aider");
   assert.deepEqual(plan.argv.slice(0, 2), ["sh", "-c"]);
   assert.ok(plan.argv[2].startsWith(`${aider.install}; printf '`), "runs the exact command");
-  assert.match(plan.argv[2], /\[finished - press Enter to close\]/);
+  assert.match(plan.argv[2], /\[finished - press Enter for a shell\]/);
   assert.match(plan.argv[2], /; read _$/);
 
   for (const agent of [
@@ -184,7 +184,7 @@ console.log("ok 6: Add all writes through edit()");
   const { m, cx, drain } = await boot({ programs: {}, onPath: "omp" });
   m.render();
   assert.ok(m.shown.includes("button:install-aider"), "a runnable install has a button");
-  assert.ok(!m.shown.includes("button:install-trea-agent"), "a docs-only entry has none");
+  assert.ok(!m.shown.includes("button:install-trae-agent"), "a docs-only entry has none");
   assert.ok(!m.shown.includes("button:install-omp"), "an installed agent has none");
   assert.ok(!m.actionIds().includes("install-aider"), "not a row action");
   assert.ok(!m.tabOrder().includes("install-aider"), "not a Tab stop");

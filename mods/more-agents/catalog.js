@@ -6,6 +6,9 @@
 //         "unverified" (not offered for adding) or
 //         "builtin" (Herdr already ships it in its + menu; informational only).
 // checked: "YYYY-MM-DD" of the last review of `source`; required for verified.
+// tier: "official" (the vendor's own org or doc site) or "community" (a
+//       third-party or personal repository). Required for verified, forbidden
+//       otherwise.
 // nativeOsc: true when the agent reports its program status over OSC 7501 by
 //            itself, so it needs no bridge from this repo and the dialog must
 //            not suggest one. Never together with "bridge".
@@ -27,6 +30,7 @@ export default [
     "docs": "https://omp.sh/docs/quickstart",
     "icon": "icons/pi.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://omp.sh/docs/quickstart",
     "checked": "2026-11-01",
     "nativeOsc": true,
@@ -50,6 +54,7 @@ export default [
     "docs": "https://commandcode.ai/docs/quickstart",
     "icon": "icons/command-code.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://commandcode.ai/docs/reference/cli",
     "checked": "2026-11-01",
     "bridge": "bridges/command-code",
@@ -68,6 +73,7 @@ export default [
     "docs": "https://github.com/ccch1mneyyy/dsh-TUI#readme",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "community",
     "source": "https://github.com/ccch1mneyyy/dsh-TUI/blob/main/README.md",
     "checked": "2026-11-06",
     "nativeOsc": true,
@@ -90,6 +96,7 @@ export default [
     "docs": "https://kilo.ai/docs/cli",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://kilo.ai/docs/code-with-ai/platforms/cli",
     "checked": "2026-11-01",
     "note": "Fork of OpenCode."
@@ -111,6 +118,7 @@ export default [
     "docs": "https://github.com/QwenLM/qwen-code",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://github.com/QwenLM/qwen-code/blob/main/docs/users/common-workflow.md",
     "checked": "2026-11-01"
   },
@@ -128,6 +136,7 @@ export default [
     "docs": "https://goose-docs.ai/docs/guides/goose-cli-commands",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://goose-docs.ai/docs/guides/goose-cli-commands",
     "checked": "2026-11-01",
     "note": "Continue unverified: --resume resumes a session, but the docs do not say it defaults to the latest one."
@@ -149,6 +158,7 @@ export default [
     "docs": "https://aider.chat/docs/install.html",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://aider.chat/docs/config/options.html",
     "checked": "2026-11-01",
     "note": "Runs under Python; Herdr recognizes it by the script name."
@@ -166,6 +176,7 @@ export default [
     "docs": "https://docs.cline.bot/cline-cli/overview",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://docs.cline.bot/cli/cli-reference",
     "checked": "2026-11-01",
     "note": "Continue needs a session id (`--id`); there is no documented flag for the latest session."
@@ -187,6 +198,7 @@ export default [
     "docs": "https://docs.factory.ai/reference/cli-reference",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://docs.factory.ai/reference/cli-reference",
     "checked": "2026-11-01",
     "note": "--resume without an id opens the most recently modified session."
@@ -208,6 +220,7 @@ export default [
     "docs": "https://docs.augmentcode.com/cli/reference",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://docs.augmentcode.com/cli/reference",
     "checked": "2026-11-01"
   },
@@ -228,6 +241,7 @@ export default [
     "docs": "https://junie.jetbrains.com/docs/junie-cli.html",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://junie.jetbrains.com/docs/parameters.html",
     "checked": "2026-11-01",
     "note": "--resume resumes the last session; --session-id picks a specific one."
@@ -249,6 +263,7 @@ export default [
     "docs": "https://github.com/mistralai/mistral-vibe",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://github.com/mistralai/mistral-vibe#readme",
     "checked": "2026-11-01"
   },
@@ -269,6 +284,7 @@ export default [
     "docs": "https://github.com/continuedev/continue/tree/main/extensions/cli",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://github.com/continuedev/continue/blob/main/extensions/cli/README.md",
     "checked": "2026-11-01",
     "note": "Resumes the last session for this terminal."
@@ -286,9 +302,136 @@ export default [
     "docs": "https://github.com/bytedance/trae-agent#-installation",
     "icon": "icons/agent.svg",
     "status": "verified",
+    "tier": "official",
     "source": "https://github.com/bytedance/trae-agent#readme",
     "checked": "2026-11-01",
     "note": "Installed with git clone + uv sync in a venv: trae-cli has to be on your PATH."
+  },
+  {
+    "id": "codebuff",
+    "name": "Codebuff",
+    "run": [
+      "codebuff"
+    ],
+    "match": [
+      "codebuff"
+    ],
+    "install": "npm install -g codebuff",
+    "docs": "https://www.codebuff.com/docs/help/quick-start",
+    "icon": "icons/agent.svg",
+    "status": "verified",
+    "tier": "official",
+    "source": "https://www.codebuff.com/docs/help/quick-start",
+    "checked": "2026-11-06",
+    "note": "Continue unverified: the docs do not give a flag for the latest session."
+  },
+  {
+    "id": "forge",
+    "name": "Forge",
+    "run": [
+      "forge"
+    ],
+    "match": [
+      "forge"
+    ],
+    "install": "curl -fsSL https://forgecode.dev/cli | sh",
+    "docs": "https://github.com/tailcallhq/forgecode/blob/main/README.md",
+    "icon": "icons/agent.svg",
+    "status": "verified",
+    "tier": "official",
+    "source": "https://github.com/tailcallhq/forgecode/blob/main/README.md",
+    "checked": "2026-11-06",
+    "note": "Continue needs a conversation id (`forge conversation resume <id>`); there is no documented flag for the latest session."
+  },
+  {
+    "id": "kiro-cli",
+    "name": "Kiro CLI",
+    "run": [
+      "kiro-cli"
+    ],
+    "match": [
+      "kiro-cli"
+    ],
+    "continue": [
+      "kiro-cli",
+      "chat",
+      "--resume"
+    ],
+    "install": "curl -fsSL https://cli.kiro.dev/install | bash",
+    "docs": "https://kiro.dev/docs/cli/",
+    "icon": "icons/kiro.svg",
+    "status": "verified",
+    "tier": "official",
+    "source": "https://kiro.dev/docs/reference/cli-commands/",
+    "checked": "2026-11-06",
+    "note": "`kiro-cli chat --resume` resumes the previous conversation in this directory."
+  },
+  {
+    "id": "nanocoder",
+    "name": "Nanocoder",
+    "run": [
+      "nanocoder"
+    ],
+    "match": [
+      "nanocoder"
+    ],
+    "continue": [
+      "nanocoder",
+      "--continue"
+    ],
+    "install": "npm install -g @nanocollective/nanocoder",
+    "docs": "https://github.com/Nano-Collective/nanocoder/blob/main/docs/getting-started/installation.md",
+    "icon": "icons/agent.svg",
+    "status": "verified",
+    "tier": "official",
+    "source": "https://github.com/Nano-Collective/nanocoder/blob/main/docs/getting-started/index.md",
+    "checked": "2026-11-06",
+    "note": "`--continue` resumes the most recent saved session in the current directory."
+  },
+  {
+    "id": "openhands",
+    "name": "OpenHands CLI",
+    "run": [
+      "openhands"
+    ],
+    "match": [
+      "openhands"
+    ],
+    "continue": [
+      "openhands",
+      "--resume",
+      "--last"
+    ],
+    "install": "curl -fsSL https://install.openhands.dev/install.sh | sh",
+    "docs": "https://docs.openhands.dev/openhands/usage/cli/installation",
+    "icon": "icons/agent.svg",
+    "status": "verified",
+    "tier": "official",
+    "source": "https://github.com/OpenHands/OpenHands-CLI/blob/main/README.md",
+    "checked": "2026-11-06",
+    "note": "Upstream says this CLI is no longer maintained. `--resume --last` resumes the latest conversation."
+  },
+  {
+    "id": "pi",
+    "name": "Pi",
+    "run": [
+      "pi"
+    ],
+    "match": [
+      "pi"
+    ],
+    "continue": [
+      "pi",
+      "--continue"
+    ],
+    "install": "curl -fsSL https://pi.dev/install.sh | sh",
+    "docs": "https://pi.dev/docs/latest/quickstart",
+    "icon": "icons/pi.svg",
+    "status": "verified",
+    "tier": "official",
+    "source": "https://pi.dev/docs/latest/cli",
+    "checked": "2026-11-06",
+    "note": "`--continue` resumes the most recent session in the current directory."
   },
   {
     "id": "gemini",

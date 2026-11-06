@@ -38,13 +38,14 @@ const fail = (msg) => {
   process.exit(1);
 };
 
-const usage = () => console.log(`Usage: node bridges/command-code/install.mjs [--uninstall | --dry-run]
+const usage = () => console.log(`Usage: node bridges/command-code/install.mjs [--status | --uninstall | --dry-run]
 
 Merge Herdr OSC 7501 command hooks into ~/.commandcode/settings.json,
 trust those commands in ~/.commandcode/trusted-hooks.json,
 or remove only this adapter's hooks and fingerprints.
 The earlier ~/.local/share/herdr-cmd-osc command is included.
-Other hooks stay. The More agents mod never runs this.`);
+Other hooks stay. --status prints one JSON line and writes nothing.
+The More agents mod never runs this.`);
 
 if (args.includes("--help") || args.includes("-h")) {
   usage();
@@ -55,7 +56,7 @@ if (args.length === 1 && args[0] === "--dry-run") {
   console.log(`command-code-bridge: dry run. Would edit ${settingsPath} and ${trustPath}. Writes nothing.`);
   process.exit(0);
 }
-if (args.length > 1 || (args.length === 1 && args[0] !== "--uninstall")) {
+if (args.length > 1 || (args.length === 1 && !["--uninstall", "--status"].includes(args[0]))) {
   usage();
   process.exit(1);
 }
@@ -93,6 +94,68 @@ const staticCommands = {
 
 function desiredCommands() {
   return [staticCommands.idle, staticCommands.pretool, staticCommands.working];
+}
+
+// The status rule is exactly what installInto would write. A hook the user
+// edited (another timeout, say) is not the rule this adapter installs.
+function sameRule(hook, expected) {
+  if (!hook || typeof hook !== "object" || Array.isArray(hook)) return false;
+  return hook.type === expected.type && hook.command === expected.command
+    && hook.timeout === expected.timeout && hook.async === expected.async;
+}
+
+function hasRule(entries, expected) {
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const hooks = entry && typeof entry === "object" && Array.isArray(entry.hooks) ? entry.hooks : [entry];
+    for (const hook of hooks) if (sameRule(hook, expected)) return true;
+  }
+  return false;
+}
+
+function expectedRule(state) {
+  return rule(state === "pretool" ? staticCommands.pretool : commandFor(state));
+}
+
+// Read-only. Never calls fail(): a broken file is a status, not an error exit.
+// Trust fingerprints are not hook rules; install and --uninstall keep them in step.
+function printStatus() {
+  const report = { app: APP, installed: false, file: settingsPath };
+  if (existsSync(settingsPath)) {
+    let text;
+    try {
+      text = readFileSync(settingsPath, "utf8");
+    } catch {
+      report.error = "unreadable";
+      console.log(JSON.stringify(report));
+      return;
+    }
+    if (text.trim() !== "") {
+      let doc;
+      try {
+        doc = JSON.parse(text);
+      } catch {
+        report.error = "invalid-json";
+        console.log(JSON.stringify(report));
+        return;
+      }
+      if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+        report.error = "invalid-json";
+        console.log(JSON.stringify(report));
+        return;
+      }
+      const map = doc.hooks && typeof doc.hooks === "object" && !Array.isArray(doc.hooks) ? doc.hooks : {};
+      let present = 0;
+      for (const [event, state] of EVENTS) if (hasRule(map[event], expectedRule(state))) present++;
+      report.installed = present === EVENTS.length;
+      if (present > 0 && !report.installed) report.partial = true;
+    }
+  }
+  console.log(JSON.stringify(report));
+}
+
+if (args.length === 1 && args[0] === "--status") {
+  printStatus();
+  process.exit(0);
 }
 
 function sha16(value) {
