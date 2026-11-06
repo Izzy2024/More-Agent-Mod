@@ -324,4 +324,62 @@ for (const args of [["empryo", "idle"], ["cursor", "working"], ["command-code", 
   }
 }
 
+// --status: one JSON line, exit 0, never a write. Absent, installed, partial
+// and invalid JSON, for each adapter.
+{
+  const statusOf = (homeDir, script) => {
+    const result = runIn(homeDir, script, ["--status"]);
+    assert.equal(result.status, 0, result.stderr);
+    const lines = result.stdout.trim().split("\n").filter(Boolean);
+    assert.equal(lines.length, 1, `${script} --status prints exactly one line`);
+    return JSON.parse(lines[0]);
+  };
+  for (const [script, rel, app] of [
+    [EMPRYO, join(".empryo", "hooks.json"), "empryo"],
+    [CURSOR, join(".cursor", "hooks.json"), "cursor"],
+    [COMMAND_CODE, join(".commandcode", "settings.json"), "command-code"],
+  ]) {
+    const statusHome = fs.mkdtempSync(join(os.tmpdir(), `ma-bridges-status-${app}-`));
+    const file = join(statusHome, rel);
+    let st = statusOf(statusHome, script);
+    assert.deepEqual([st.app, st.installed, st.file], [app, false, file], `${app}: absent`);
+    assert.equal(fs.existsSync(file), false, `${app}: --status creates nothing`);
+
+    const installed = runIn(statusHome, script);
+    assert.equal(installed.status, 0, installed.stderr);
+    st = statusOf(statusHome, script);
+    assert.deepEqual([st.app, st.installed, st.file], [app, true, file], `${app}: installed after a real run`);
+    const bytes = fs.readFileSync(file);
+    statusOf(statusHome, script);
+    assert.ok(bytes.equals(fs.readFileSync(file)), `${app}: --status writes nothing`);
+
+    // Partial: remove one event that carries this adapter's hooks.
+    const doc = JSON.parse(fs.readFileSync(file, "utf8"));
+    const map = doc.hooks ?? doc;
+    const ours = Object.keys(map).filter((event) => JSON.stringify(map[event]).includes("herdr-osc.sh"));
+    assert.ok(ours.length > 1, `${app}: several hook events`);
+    delete map[ours[0]];
+    fs.writeFileSync(file, `${JSON.stringify(doc, null, 2)}\n`);
+    st = statusOf(statusHome, script);
+    assert.equal(st.installed, false, `${app}: a partial bridge is not installed`);
+    assert.equal(st.partial, true, `${app}: partial flag`);
+
+    // Invalid JSON: exit 0, one line, and never "installed".
+    fs.writeFileSync(file, "{oops");
+    st = statusOf(statusHome, script);
+    assert.equal(st.installed, false, `${app}: invalid JSON is not installed`);
+    assert.equal(st.error, "invalid-json", `${app}: invalid-json error`);
+    assert.equal(fs.readFileSync(file, "utf8"), "{oops", `${app}: the broken file is untouched`);
+
+    // After a real uninstall the status is false again.
+    fs.rmSync(file, { force: true });
+    runIn(statusHome, script);
+    const removed = runIn(statusHome, script, ["--uninstall"]);
+    assert.equal(removed.status, 0, removed.stderr);
+    st = statusOf(statusHome, script);
+    assert.equal(st.installed, false, `${app}: not installed after --uninstall`);
+  }
+}
+console.log("bridges.test: --status absent/installed/partial/invalid OK");
+
 console.log("bridges.test: emitter + empryo, cursor, command-code adapters OK");

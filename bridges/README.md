@@ -2,7 +2,18 @@
 
 Optional hooks that report an agent's state to Herdr. An agent that does not write [OSC 7501](#osc-7501) itself gets a small adapter. Every adapter calls the same emitter, `bridges/lib/herdr-osc.sh`.
 
-The More agents mod does not run anything in this folder. `scripts/install.mjs` copies the mod and this folder into the app home and runs nothing here. Adding a row to `programs.json` does not register hooks. You install an adapter yourself, from a checkout or from the installed copy, after reading it.
+The More agents mod does not run anything in this folder by itself. `scripts/install.mjs` copies the mod and this folder into the app home. Adding a row to `programs.json` does not register hooks, but a catalog row with a `bridge` field shows whether its adapter is installed and can install or remove it after you confirm. The installers below stay runnable by hand.
+
+## Status, install and removal
+
+Every adapter accepts `--status`: it prints one JSON line and writes nothing.
+
+```sh
+node bridges/cursor/install.mjs --status
+{"app":"cursor","installed":true,"file":"/Users/x/.cursor/hooks.json"}
+```
+
+`installed` is true only when every hook rule the adapter would write is present. A file with only some of them also reports `"partial":true`, and invalid JSON reports `"error":"invalid-json"` with `installed:false`. The dialog reads this when it opens and after every change, paints `installed` / `not installed` next to the Bridge button, and offers the install or the removal. Confirming there runs the same installer (`--uninstall` for the removal) from the folder the dialog was loaded from, after showing the hook file and the exact command. Nothing runs before you confirm.
 
 ## The + menu and the Agents panel
 
