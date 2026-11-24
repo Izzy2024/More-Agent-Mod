@@ -18,6 +18,8 @@
     "mods",
     "bridges",
     "scripts",
-    "keys.json"
+    "keys.json",
+    "!mods/more-agents/gpui-kit.d.ts",
+    "!mods/more-agents/jsconfig.json"
   ]
 }
